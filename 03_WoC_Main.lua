@@ -1,35 +1,39 @@
 ---Start the main script for setting up the Wings of Conflict Mission--
 
 -- Testing Spawn of Predefined group in 04_WoC_Groups.lua
-SamCount = 0
-Template_Spawnzone = ZONE:FindByName("Template_Spawn_Zone")  -- Ensure the zone exists
-BlueSamGroupName = "Group_USA_Hawk"  -- Use the actual group name
+SamCount = 1
+airfieldName = "Palmachim"
+MinDistance =200
+MaxDistance = 1000
 
-function Spawn_Blue_SAM_Site(GroupName)
-    local GroupTemplate = GROUP:FindByName(GroupName) -- Find group by name in ME
+function Spawn_Near_airbase(GroupTemplate,Inner,Outer)
+    local Group = GROUP:FindByName(GroupTemplate) -- Find group by name in ME
     if not GroupTemplate then
-        env.info("ERROR: Group template "..GroupName.." not found!")
+        env.info("ERROR: Group template "..GroupTemplate.." not found!")
         return
     end
-
     -- Generate unique name
-    local Groupname = GroupName.."_"..SamCount
-    local SpawnPoint = Template_Spawnzone:GetRandomVec2() -- Get a random Vec2
-    local newX = SpawnPoint.x
-    local newY = SpawnPoint.y
+    local GroupName = airfieldName.."_"..GroupTemplate.."_"..SamCount
+    local SpawnZone = AIRBASE:FindByName(airfieldName):GetZone()
+    local Spawnpoint = SpawnZone:GetRandomCoordinate(Inner, Outer, land.SurfaceType.ROAD) -- Get a random Vec2
 
     -- Log spawn action
-    env.info("Spawning "..GroupName.." with name "..Groupname.." at X:"..newX.." Y:"..newY)
+    env.info("Spawning "..GroupTemplate.." with name "..GroupName)
 
     -- Spawn using Moose
-    Group_SAM_Hawk = SPAWN:New(GroupName)
-        :InitCountry(country.id.USA)
-        :InitCategory(Group.Category.GROUND)
-        :InitCoalition(coalition.side.BLUE)
-        :SpawnFromVec3(SpawnPointVec3)
+    Group_Spawn = SPAWN:NewWithAlias(GroupTemplate, GroupName)
+    --Group_Spawn:InitPositionVec2(Spawnpoint)
+    Group_Spawn:InitPositionCoordinate(Spawnpoint)
+    Group_Spawn:Spawn()
 
     -- Increment counter
     SamCount = SamCount + 1
 end
 
-Spawn_Blue_SAM_Site(BlueSamGroupName)
+Spawn_Near_airbase(Group_Blue_SAM_Site, MinDistance, MaxDistance)
+Spawn_Near_airbase(Group_Blue_SAM, MinDistance, MaxDistance)
+Spawn_Near_airbase(Group_Blue_Mech, MinDistance, MaxDistance)
+Spawn_Near_airbase(Group_Blue_APC, MinDistance, MaxDistance)
+Spawn_Near_airbase(Group_Blue_Armoured, MinDistance, MaxDistance)
+Spawn_Near_airbase(Group_Blue_Inf, MinDistance, MaxDistance)
+Spawn_Near_airbase(Group_Blue_Truck, MinDistance, MaxDistance)
