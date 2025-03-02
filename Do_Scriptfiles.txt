@@ -1,0 +1,4 @@
+local lfs = require("lfs")
+local savedGamesPath = lfs.writedir() -- This gets "C:/Users/YourUsername/Saved Games/DCS/" dynamically
+dofile(lfs.writedir() .. "Missions/WoC-Sinai/01_WoC_Index.lua")
+

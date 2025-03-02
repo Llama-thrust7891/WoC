@@ -1,4 +1,4 @@
-local function getAllAirbaseNames()
+function getAllAirbaseNames()
     local airfields = {}  -- Correctly define this table
     
     
@@ -13,7 +13,7 @@ local function getAllAirbaseNames()
     
 end
 
-local airbaseNames = getAllAirbaseNames()
+AirfieldNames = getAllAirbaseNames()
 -- Assign airfields west of "Baluza" to Red, others to Blue
 redAirfields = {}
 blueAirfields = {}
@@ -23,7 +23,7 @@ redAirfieldszoneset =  SET_ZONE:New()
 blueAirfieldszoneset = SET_ZONE:New()
 referenceAirfield = "Baluza"
 
-
+function sortairfields()
 for _, airfieldName in ipairs(airbaseNames) do  -- Use 'airbaseNames' here
     local airfield = AIRBASE:FindByName(airfieldName)
     if airfield then
@@ -40,12 +40,14 @@ for _, airfieldName in ipairs(airbaseNames) do  -- Use 'airbaseNames' here
         end
     end
 end
+end
 
 -- Display airfield assignments
 --trigger.action.outText("Red Airfields: " .. table.concat(redAirfields, ", ") .. "\nBlue Airfields: " .. table.concat(blueAirfields, ", "), 25)
 
 -- Helper function to ensure units spawn on land and not runways
 -- Also ensures units do not spawn at the same spot as another unit
+
 local function findSuitableSpawnPosition(basePosition, minDistance, maxDistance, coalitionSide)
     local retries = 150 -- Max attempts to find a suitable position
     while retries > 0 do
