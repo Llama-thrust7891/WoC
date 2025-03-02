@@ -14,6 +14,6 @@ Group_SAM__Hawk:Spawn()
 end
 
 SamCount = 000
-Groupname = GroupTemplate.."_"..SamCount+1
+Groupname = BlueSamGroupName.."_"..SamCount+1
 
 spawn_Blue_SAM_Site(BlueSamGroupName, Groupname )
