@@ -33,22 +33,22 @@ blueAirfieldszoneset = SET_ZONE:New()
 referenceAirfield = "Baluza"
 
 function sortairfields()
-for _, airfieldName in ipairs(AirfieldNames) do  -- Use 'airbaseNames' here
-    local airfield = AIRBASE:FindByName(airfieldName)
-    if airfield then
-        local airfieldPosition = airfield:GetVec2()
-        local referenceAirfieldPosition = AIRBASE:FindByName(referenceAirfield):GetVec2()
-        --
-        if airfieldPosition.y < referenceAirfieldPosition.y then
-            table.insert(redAirfields, airfieldName)
-            redAirfieldszoneset:AddZone(airfield:GetZone())
+    for _, airfieldName in ipairs(AirfieldNames) do  -- Use 'airbaseNames' here
+        local airfield = AIRBASE:FindByName(airfieldName)
+        if airfield then
+            local airfieldPosition = airfield:GetVec2()
+            local referenceAirfieldPosition = AIRBASE:FindByName(referenceAirfield):GetVec2()
+            --
+            if airfieldPosition.y < referenceAirfieldPosition.y then
+                table.insert(redAirfields, airfieldName)
+                redAirfieldszoneset:AddZone(airfield:GetZone())
 
-        else
-            table.insert(blueAirfields, airfieldName)
-            blueAirfieldszoneset:AddZone(airfield:GetZone())
+            else
+                table.insert(blueAirfields, airfieldName)
+                blueAirfieldszoneset:AddZone(airfield:GetZone())
+            end
         end
     end
-end
 end
 
 function AssignPatrolMission(GroupName, airfieldName)
@@ -144,9 +144,8 @@ function CreateAirfieldOpszones(airfieldName)
     local zoneName = "Capture Zone - " .. airfieldName
     local zoneRadius = 5000 -- 5 km capture zone
     local zone = ZONE_AIRBASE:New(airfieldName, zoneRadius)
-    local opzone = OPSZONE:New(zone):SetDrawZone(true):SetCaptureThreatlevel(2)
+    local opzone = OPSZONE:New(zone):SetDrawZone(true)
 end
-
 ----For each airbase, check for the number of Aircraft parking and Helicopter parking----
 ---- Used when deploying squadrons to determine suitable aircraft (helo \vtol strips\ minor \major airbase.)
 
@@ -964,3 +963,79 @@ OPS_Zones:Start()
 
 local deployairwingsSchedule = SCHEDULER:New( nil, deployairwings(),{}, 5  )
 deployairwingsSchedule:Start()
+
+
+----------------------------------
+----------------------------------
+--Test Capture Zone Functions-----
+----------------------------------
+----------------------------------
+---just checking ops zones -----
+
+allOpsZones:ForEachZone(function(opszone)
+    env.info("Monitoring OPSZONE: " .. opszone:GetName())
+
+    function opszone:OnAfterCaptured(From, Event, To, Coalition)
+
+        -- Convert Coalition to a usable string
+        local coalitionSide = (Coalition == coalition.side.BLUE and "blue") or "red"
+
+        env.info("OPSZONE Capture Event Triggered! " ..
+                 "From: " .. tostring(From) .. 
+                 " Event: " .. tostring(Event) .. 
+                 " To: " .. tostring(To) .. 
+                 " Coalition: " .. tostring(coalitionSide))
+
+        if coalitionSide then
+            env.info("OpsZone " .. self:GetName() .. " captured by Coalition '" .. coalitionSide .. "'!")
+
+           -- destroyZoneObjects(self)  -- Destroy objects in the captured zone
+           -- DeployNewZoneForces(coalitionSide)  -- Deploy forces based on new owner
+        else
+            env.info("OpsZone capture event triggered, but Coalition was nil!")
+        end
+    end
+end)
+
+----Used just to test a zone capture event by destroying all units.
+function destroyzonered()
+    local zonename = "As Salihiyah"
+    local testOpszone = ZONE:New(zonename) -- Use ZONE:New instead of FindByName
+
+    -- Create a SET_GROUP to collect all active groups inside the zone
+    local SetGroups = SET_GROUP:New():FilterActive():FilterZones({testOpszone}):FilterOnce()
+
+    SetGroups:ForEachGroup(function(group)
+        env.info("Found group: " .. group:GetName() .. " - Destroying!!!")
+        group:Destroy() -- Correct destroy method
+    end)
+
+    -- Respawn new group after destruction
+    Spawn_Near_airbase(Group_Blue_Mech, "As Salihiyah", MinDistance, MaxDistance)
+end
+
+function destroyzoneblue()
+    local zonename = "Melez"
+    local testOpszone = ZONE:New(zonename) -- Use ZONE:New instead of FindByName
+
+    -- Create a SET_GROUP to collect all active groups inside the zone
+    local SetGroups = SET_GROUP:New():FilterActive():FilterZones({testOpszone}):FilterOnce()
+
+    SetGroups:ForEachGroup(function(group)
+        env.info("Found group: " .. group:GetName() .. " - Destroying!!!")
+        group:Destroy() -- Correct destroy method
+    end)
+
+    -- Respawn new group after destruction
+    Spawn_Near_airbase(Group_Red_Mech, "Melez", MinDistance, MaxDistance)
+end
+
+-- Schedule functions properly
+local destroyzoneredSchedule = SCHEDULER:New(nil, destroyzonered, {}, 10) -- No parentheses
+local destroyzoneblueSchedule = SCHEDULER:New(nil, destroyzoneblue, {}, 15) -- No parentheses
+
+-----------------------------
+-----------------------------
+--------End TEstcode---------
+-----------------------------
+-----------------------------
