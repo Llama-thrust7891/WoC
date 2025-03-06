@@ -972,30 +972,61 @@ deployairwingsSchedule:Start()
 ----------------------------------
 ---just checking ops zones -----
 
-allOpsZones:ForEachZone(function(opszone)
-    env.info("Monitoring OPSZONE: " .. opszone:GetName())
+function monitoropszones()
+    allOpsZones:ForEachZone(function(opszone)
+        env.info("Monitoring OPSZONE: " .. opszone:GetName())
 
-    function opszone:OnAfterCaptured(From, Event, To, Coalition)
+        function opszone:OnAfterCaptured(From, Event, To, Coalition)
 
-        -- Convert Coalition to a usable string
-        local coalitionSide = (Coalition == coalition.side.BLUE and "blue") or "red"
+            -- Convert Coalition to a usable string
+            local coalitionSide = (Coalition == coalition.side.BLUE and "blue") or "red"
 
-        env.info("OPSZONE Capture Event Triggered! " ..
-                 "From: " .. tostring(From) .. 
-                 " Event: " .. tostring(Event) .. 
-                 " To: " .. tostring(To) .. 
-                 " Coalition: " .. tostring(coalitionSide))
 
-        if coalitionSide then
-            env.info("OpsZone " .. self:GetName() .. " captured by Coalition '" .. coalitionSide .. "'!")
+            local airfieldName = opszone:GetZone():GetName()
+            env.info("Deploying Airwing and Brigade HQ at "..airfieldName)
+            local warehouseName = "warehouse_" .. airfieldName
+            env.info("New warehouse name is: " .. warehouseName)
+            local coalitionSide = (Coalition == coalition.side.BLUE and "blue") or "red"
 
-           -- destroyZoneObjects(self)  -- Destroy objects in the captured zone
-           -- DeployNewZoneForces(coalitionSide)  -- Deploy forces based on new owner
-        else
-            env.info("OpsZone capture event triggered, but Coalition was nil!")
+                if coalitionSide == "blue" then
+                    coalitionSide = "USA"
+                    SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
+                    function(warehouse)
+                        local warehouseName = warehouse:GetName()
+                        local airwingName = GenerateUniqueSquadronName("Blue Airwing " .. warehouseName)
+                        local airfieldName = warehouseName:gsub("^warehouse_", "")
+                        local airwing = CreateBlueAirwing(warehouse, airwingName, airfieldName)  -- Get the airwing object
+                    end
+                elseif coalitionSide == "red" then
+                    coalitionSide = "RUSSIA"
+                    SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
+                    function(warehouse)
+                        local warehouseName = warehouse:GetName()
+                        local airwingName = GenerateUniqueSquadronName("Red Airwing " .. warehouseName)
+                        local airfieldName = warehouseName:gsub("^warehouse_", "")
+                        local airwing = CreateRedAirwing(warehouse, airwingName, airfieldName)  -- Get the airwing object
+                    end
+                end
+            
+
+
+            env.info("OPSZONE Capture Event Triggered! " ..
+                     "From: " .. tostring(From) .. 
+                     " Event: " .. tostring(Event) .. 
+                     " To: " .. tostring(To) .. 
+                     " Coalition: " .. tostring(coalitionSide))
+
+            if coalitionSide then
+                env.info("OpsZone " .. self:GetName() .. " captured by Coalition '" .. coalitionSide .. "'!")
+                SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
+               -- destroyZoneObjects(self)  -- Destroy objects in the captured zone
+               -- DeployNewZoneForces(coalitionSide)  -- Deploy forces based on new owner
+            else
+                env.info("OpsZone capture event triggered, but Coalition was nil!")
+            end
         end
-    end
-end)
+    end)
+end
 
 ----Used just to test a zone capture event by destroying all units.
 function destroyzonered()
@@ -1031,9 +1062,13 @@ function destroyzoneblue()
 end
 
 -- Schedule functions properly
-local destroyzoneredSchedule = SCHEDULER:New(nil, destroyzonered, {}, 10) -- No parentheses
-local destroyzoneblueSchedule = SCHEDULER:New(nil, destroyzoneblue, {}, 15) -- No parentheses
-
+timer.scheduleFunction(monitoropszones, {}, timer.getTime() + 10)
+timer.scheduleFunction(destroyzonered, {}, timer.getTime() + 13)
+timer.scheduleFunction(destroyzoneblue, {}, timer.getTime() + 16)
+--local destroyzoneredSchedule = SCHEDULER:New(nil, destroyzonered, {}, 12) -- No parentheses
+--local destroyzoneblueSchedule = SCHEDULER:New(nil, destroyzoneblue, {}, 15) -- No parentheses
+--destroyzoneredSchedule:Start()
+--destroyzoneblueSchedule:Start()
 -----------------------------
 -----------------------------
 --------End TEstcode---------
