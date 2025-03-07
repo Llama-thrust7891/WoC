@@ -165,7 +165,8 @@ local function airbaseParkingSummary(airfieldName)
     end
 
     -- Initialize counters
-
+    local heliParkingCount = 0
+    local aircraftParkingCount = 0
 
     -- Iterate through parking data and count the term types
     for _, spot in ipairs(parkingData) do
@@ -199,8 +200,8 @@ function SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
     local Attempts = 0
 
     repeat
-        Spawnpoint = SpawnZone:GetRandomCoordinate(50, 1000, land.SurfaceType.LAND)
-        if land.getSurfaceType(Spawnpoint) == land.SurfaceType.LAND then
+        Spawnpoint = SpawnZone:GetRandomCoordinate(50, 1000, land.SurfaceType.ROAD)
+        if land.getSurfaceType(Spawnpoint) == land.SurfaceType.ROAD then
             ValidSpawn = true
         else
             Attempts = Attempts + 1
@@ -303,9 +304,12 @@ local function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDi
    local parkingCount = aircraftParkingCount +heliParkingCount
    
     SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
-    env.info("Finished Spawning Blue warehouse at airbase "..airfieldName)
-
-    if  parkingCount > 100 then
+    local function spawnmessageblue()
+          env.info("Finished Spawning Blue warehouse at airbase "..airfieldName)
+          end
+     timer.scheduleFunction(spawnmessageblue, {}, timer.getTime() + 1)
+     
+        if  parkingCount > 100 then
         Spawn_Near_airbase(Group_Blue_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
     end
 
@@ -327,7 +331,12 @@ local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDis
     local parkingCount = aircraftParkingCount +heliParkingCount
   
     SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
-    env.info("Finished Spawning Blue warehouse at airbase "..airfieldName)
+    local function spawnmessageRed()
+        env.info("Finished Spawning Red warehouse at airbase "..airfieldName)
+        end
+   timer.scheduleFunction(spawnmessageRed, {}, timer.getTime() + 1)
+    
+    
 
      if parkingCount > 100 then
          Spawn_Near_airbase(Group_Red_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
@@ -340,7 +349,7 @@ local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDis
      Spawn_Near_airbase(Group_Red_Inf, airfieldName, MinDistance, MaxDistance)
      Spawn_Near_airbase(Group_Red_Truck, airfieldName, MinDistance, MaxDistance)
  
-     env.info("Finished Spawning Blue Groups at airbase "..airfieldName)
+     env.info("Finished Spawning Red Groups at airbase "..airfieldName)
 
      CreateAirfieldOpszones(airfieldName)
      env.info("Finished Creating Opszone at airbase "..airfieldName)
@@ -373,7 +382,6 @@ function GenerateUniqueSquadronName(baseName)
     UsedSquadronNames[name] = true
     return name
 end
-
 -- Function to create Blue Airwing 
 ---CreateBlueAirwing(warehouse, airwingName, airfieldName) for reference
 function CreateBlueAirwing(warehouse, airwingName, airfieldName)
@@ -383,7 +391,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     local airwing = AIRWING:New(warehouseName, airwingName)
     airwing:SetAirbase(AIRBASE:FindByName(airfieldName))
     airwing:Start()
-    table.insert(BlueAirwings, airwing:GetName())
+    BlueAirwings[warehouseName] = airwing -- Store the airwing in the table
     env.info(airwingName .. " added to Blue Airwing list")
 
     -- Get parking summary for the warehouse's airbase
@@ -506,10 +514,10 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     local warehouseName = warehouse:GetName()
     local airfieldName = warehouseName:gsub("^warehouse_", "")
     local airwingName = GenerateUniqueSquadronName("Red Airwing " .. airfieldName)
-    local airwing = AIRWING:New(warehouseName, airwingname)
+    local airwing = AIRWING:New(warehouseName, airwingName)
     airwing:SetAirbase(AIRBASE:FindByName(airfieldName))
     airwing:Start()
-    table.insert(RedAirwings, airwing:GetName())
+    RedAirwings[warehouseName] = airwing -- Store the airwing in the table
     env.info(airwingName.. " added to Red Airwing list")  -- Log the report
     -- Get parking summary for the warehouse's airbase
     --local warehouseName = warehouse:GetName()
@@ -650,7 +658,7 @@ end
 -- Create Blue Chief
 
 function CreateBlueChief()
-    BlueAgents = SET_GROUP:New():FilterCoalitions("blue"):FilterOnce()
+    BlueAgents = SET_GROUP:New():FilterCoalitions("blue"):FilterStart()
 
     -- Define Blue Chief
     BlueChief = CHIEF:New(coalition.side.BLUE, BlueAgents)
@@ -726,7 +734,7 @@ end
 
 -- Create Red Chief
 function CreateRedChief()
-    RedAgents = SET_GROUP:New():FilterCoalitions("red"):FilterOnce()
+    RedAgents = SET_GROUP:New():FilterCoalitions("red"):FilterStart()
 
     -- Define Red Chief
       RedChief = CHIEF:New(coalition.side.RED, RedAgents)
@@ -965,6 +973,8 @@ local deployairwingsSchedule = SCHEDULER:New( nil, deployairwings(),{}, 5  )
 deployairwingsSchedule:Start()
 
 
+-- Example usage: Log all assets in the warehouse named "warehouse_Airfield1"
+
 ----------------------------------
 ----------------------------------
 --Test Capture Zone Functions-----
@@ -975,58 +985,62 @@ deployairwingsSchedule:Start()
 function monitoropszones()
     allOpsZones:ForEachZone(function(opszone)
         env.info("Monitoring OPSZONE: " .. opszone:GetName())
-
+        
         function opszone:OnAfterCaptured(From, Event, To, Coalition)
 
             -- Convert Coalition to a usable string
             local coalitionSide = (Coalition == coalition.side.BLUE and "blue") or "red"
-
-
             local airfieldName = opszone:GetZone():GetName()
             env.info("Deploying Airwing and Brigade HQ at "..airfieldName)
             local warehouseName = "warehouse_" .. airfieldName
             env.info("New warehouse name is: " .. warehouseName)
-            local coalitionSide = (Coalition == coalition.side.BLUE and "blue") or "red"
 
-                if coalitionSide == "blue" then
-                    coalitionSide = "USA"
-                    SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
-                    function(warehouse)
-                        local warehouseName = warehouse:GetName()
-                        local airwingName = GenerateUniqueSquadronName("Blue Airwing " .. warehouseName)
-                        local airfieldName = warehouseName:gsub("^warehouse_", "")
-                        local airwing = CreateBlueAirwing(warehouse, airwingName, airfieldName)  -- Get the airwing object
-                    end
-                elseif coalitionSide == "red" then
-                    coalitionSide = "RUSSIA"
-                    SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
-                    function(warehouse)
-                        local warehouseName = warehouse:GetName()
-                        local airwingName = GenerateUniqueSquadronName("Red Airwing " .. warehouseName)
-                        local airfieldName = warehouseName:gsub("^warehouse_", "")
-                        local airwing = CreateRedAirwing(warehouse, airwingName, airfieldName)  -- Get the airwing object
-                    end
-                end
-            
-
-
-            env.info("OPSZONE Capture Event Triggered! " ..
-                     "From: " .. tostring(From) .. 
-                     " Event: " .. tostring(Event) .. 
-                     " To: " .. tostring(To) .. 
-                     " Coalition: " .. tostring(coalitionSide))
-
-            if coalitionSide then
-                env.info("OpsZone " .. self:GetName() .. " captured by Coalition '" .. coalitionSide .. "'!")
-                SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
-               -- destroyZoneObjects(self)  -- Destroy objects in the captured zone
-               -- DeployNewZoneForces(coalitionSide)  -- Deploy forces based on new owner
+            -- Find and delete the existing airwing stock items
+            local existingAirwing
+            if coalitionSide == "blue" then
+                existingAirwing = BlueAirwings[warehouseName]
             else
-                env.info("OpsZone capture event triggered, but Coalition was nil!")
+                existingAirwing = RedAirwings[warehouseName]
+            end
+
+            if existingAirwing then
+                local stockInfo = existingAirwing:GetStockInfo()
+                for stockItem, _ in pairs(stockInfo) do
+                    existingAirwing:_DeleteStockItem(stockItem)
+                end
+                env.info("Existing airwing stock items deleted: " .. warehouseName)
+                if coalitionSide == "blue" then
+                    BlueAirwings[warehouseName] = nil
+                else
+                    RedAirwings[warehouseName] = nil
+                end
+            end
+
+            -- Destroy the existing warehouse
+            local warehouse = STATIC:FindByName(warehouseName)
+            if warehouse then
+                warehouse:Destroy()
+                env.info("Warehouse destroyed: " .. warehouseName)
+            end
+
+            -- Spawn new forces and create a new airwing
+            if coalitionSide == "blue" then
+                coalitionSide = "USA"
+                SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
+                SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
+                warehouse = STATIC:FindByName(warehouseName)
+                CreateBlueAirwing(warehouse, airwingName, airfieldName)
+            elseif coalitionSide == "red" then
+                coalitionSide = "RUSSIA"
+                SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
+                SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
+                warehouse = STATIC:FindByName(warehouseName)
+                CreateRedAirwing(warehouse, airwingName, airfieldName)
             end
         end
     end)
 end
+
 
 ----Used just to test a zone capture event by destroying all units.
 function destroyzonered()
@@ -1062,7 +1076,7 @@ function destroyzoneblue()
 end
 
 -- Schedule functions properly
-timer.scheduleFunction(monitoropszones, {}, timer.getTime() + 10)
+timer.scheduleFunction(monitoropszones, {}, timer.getTime() + 12)
 timer.scheduleFunction(destroyzonered, {}, timer.getTime() + 13)
 timer.scheduleFunction(destroyzoneblue, {}, timer.getTime() + 16)
 --local destroyzoneredSchedule = SCHEDULER:New(nil, destroyzonered, {}, 12) -- No parentheses
