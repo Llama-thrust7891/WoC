@@ -1,3 +1,226 @@
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+-----------------Wings of Conflict Mission Script----------------------
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+
+
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+------------------Start of Persistence Script--------------------------
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+
+local filepath = lfs.writedir() .. "\\Missions\\WoC-Sinai\\Save\\"
+
+-- Function to create the directory if it doesn't exist
+local function createDirectory(path)
+    local command = 'mkdir "' .. path .. '"'
+    os.execute(command)
+end
+
+-- Ensure the directory exists
+createDirectory(filepath)
+
+-- Define the zones dynamically using SET_ZONE
+local zonesToCheck = SET_ZONE:New():FilterStart()
+
+-- Function to save unit locations within zones
+local function saveUnitLocationsInZones()
+    local unitsInZones = {}
+
+    zonesToCheck:ForEachZone(function(zone)
+        local zoneName = zone:GetName()
+        local unitsInZone = mist.getUnitsInZones(mist.makeUnitTable({'[all][vehicle]'}), {zoneName}, 'cylinder')
+        for _, unit in ipairs(unitsInZone) do
+            local unitPos = unit:getPosition().p
+            table.insert(unitsInZones, {
+                unitName = unit:getName(),
+                zoneName = zoneName,
+                position = {x = unitPos.x, y = unitPos.y, z = unitPos.z}
+            })
+        end
+    end)
+
+    -- Save the data to a file
+    local fileName = filepath .. "unit_locations_in_zones.lua"
+    local file = io.open(fileName, "w")
+    if file then
+        file:write("unitsInZones = {\n")
+        for _, unitData in ipairs(unitsInZones) do
+            file:write("    {\n")
+            file:write('        unitName = "' .. unitData.unitName .. '",\n')
+            file:write('        zoneName = "' .. unitData.zoneName .. '",\n')
+            file:write("        position = {x = " .. unitData.position.x .. ", y = " .. unitData.position.y .. ", z = " .. unitData.position.z .. "},\n")
+            file:write("    },\n")
+        end
+        file:write("}\n")
+        file:close()
+        trigger.action.outText("Unit locations saved to " .. fileName, 10)
+    else
+        trigger.action.outText("Failed to save unit locations", 10)
+    end
+end
+
+-- Function to save static objects
+local function saveStaticObjects()
+    local staticObjects = {}
+
+    local statics = SET_STATIC:New():FilterStart()
+    statics:ForEachStatic(function(static)
+        local staticPos = static:GetPosition().p
+        table.insert(staticObjects, {
+            staticName = static:GetName(),
+            position = {x = staticPos.x, y = staticPos.y, z = staticPos.z},
+            typeName = static:GetTypeName(),
+            category = static:GetCategory(),
+            country = static:GetCountry(),
+            heading = static:GetHeading()
+        })
+    end)
+
+    -- Save the data to a file
+    local fileName = filepath .. "static_objects.lua"
+    local file = io.open(fileName, "w")
+    if file then
+        file:write("staticObjects = {\n")
+        for _, staticData in ipairs(staticObjects) do
+            file:write("    {\n")
+            file:write('        staticName = "' .. staticData.staticName .. '",\n')
+            file:write("        position = {x = " .. staticData.position.x .. ", y = " .. staticData.position.y .. ", z = " .. staticData.position.z .. "},\n")
+            file:write('        typeName = "' .. staticData.typeName .. '",\n')
+            file:write('        category = "' .. staticData.category .. '",\n')
+            file:write('        country = "' .. staticData.country .. '",\n')
+            file:write("        heading = " .. staticData.heading .. ",\n")
+            file:write("    },\n")
+        end
+        file:write("}\n")
+        file:close()
+        trigger.action.outText("Static objects saved to " .. fileName, 10)
+    else
+        trigger.action.outText("Failed to save static objects", 10)
+    end
+end
+
+
+-- Function to save airfields
+local function saveAirfields()
+    local airfieldsData = {
+        blueAirfields = {},
+        redAirfields = {}
+    }
+
+    for _, airbase in ipairs(world.getAirbases()) do
+        local airbaseName = airbase:getName()
+        local coalition = airbase:getCoalition()
+
+        if coalition == 2 then
+            table.insert(airfieldsData.blueAirfields, airbaseName)
+        elseif coalition == 1 then
+            table.insert(airfieldsData.redAirfields, airbaseName)
+        end
+    end
+
+    local fileName = filepath .. "airfields.lua"
+    local file = io.open(fileName, "w")
+    if file then
+        file:write("airfieldsData = {\n")
+        file:write("    blueAirfields = {\n")
+        for _, airbaseName in ipairs(airfieldsData.blueAirfields) do
+            file:write('        "' .. airbaseName .. '",\n')
+        end
+        file:write("    },\n")
+        file:write("    redAirfields = {\n")
+        for _, airbaseName in ipairs(airfieldsData.redAirfields) do
+            file:write('        "' .. airbaseName .. '",\n')
+        end
+        file:write("    }\n")
+        file:write("}\n")
+        file:close()
+        trigger.action.outText("Airfields saved to " .. fileName, 10)
+    else
+        trigger.action.outText("Failed to save airfields", 10)
+    end
+end
+
+-- Schedule the functions to run periodically
+--mist.scheduleFunction(saveUnitLocationsInZones, {}, timer.getTime() + 10, 180) -- Runs every 300 seconds (5 minutes)
+--mist.scheduleFunction(saveStaticObjects, {}, timer.getTime() + 10, 120) -- Runs every 300 seconds (5 minutes)
+----mist.scheduleFunction(saveAirwingsAndBrigades, {}, timer.getTime() + 10, 120) -- Runs every 300 seconds (5 minutes)
+--mist.scheduleFunction(saveAirfields, {}, timer.getTime() + 10, 120) -- Runs every 300 seconds (5 minutes)
+
+local function loadSavedData()
+    local unitLocationsFile = filepath .. "unit_locations_in_zones.lua"
+    local staticObjectsFile = filepath .. "static_objects.lua"
+
+    -- Load unit locations
+    local unitLocations = dofile(unitLocationsFile)
+    if unitLocations then
+        for _, unitData in ipairs(unitLocations.unitsInZones) do
+            local unit = Unit.getByName(unitData.unitName)
+            if unit then
+                unit:setPosition({p = unitData.position})
+            else
+                -- Spawn the unit if it doesn't exist
+                mist.dynAdd({
+                    category = 'vehicle',
+                    name = unitData.unitName,
+                    type = unitData.typeName,
+                    x = unitData.position.x,
+                    y = unitData.position.z,
+                    heading = 0
+                })
+            end
+        end
+    end
+
+    -- Load static objects
+    local staticObjects = dofile(staticObjectsFile)
+    if staticObjects then
+        for _, staticData in ipairs(staticObjects.staticObjects) do
+            local static = StaticObject.getByName(staticData.staticName)
+            if not static then
+                -- Spawn the static object if it doesn't exist
+                mist.dynAddStatic({
+                    category = 'static',
+                    name = staticData.staticName,
+                    type = staticData.typeName,
+                    x = staticData.position.x,
+                    y = staticData.position.z,
+                    heading = staticData.heading
+                })
+            end
+        end
+    end
+end
+-- Function to load airfields
+local function loadAirfields()
+    local airfieldsFile = filepath .. "airfields.lua"
+    local airfieldsData, loadError = loadfile(airfieldsFile)
+    
+    if airfieldsData then
+        local success, result = pcall(airfieldsData)
+        if success and result then
+            blueAirfields = result.blueAirfields
+            redAirfields = result.redAirfields
+            trigger.action.outText("Airfields loaded successfully", 10)
+        else
+            trigger.action.outText("Failed to execute airfields file: " .. tostring(result), 10)
+            sortairfields()
+        end
+    else
+        trigger.action.outText("Failed to load airfields file: " .. tostring(loadError), 10)
+        sortairfields()
+    end
+end
+
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+------------------End of Persistence Script----------------------------
+-----------------------------------------------------------------------
+-----------------------------------------------------------------------
+
+
 ---Start the main script for setting up the Wings of Conflict Mission--
 SamCount = 1
 MinDistance = 300
@@ -33,16 +256,19 @@ blueAirfieldszoneset = SET_ZONE:New()
 referenceAirfield = "Baluza"
 
 function sortairfields()
-    for _, airfieldName in ipairs(AirfieldNames) do  -- Use 'airbaseNames' here
+    if not blueAirfields or not redAirfields then
+        blueAirfields = {}
+        redAirfields = {}
+    end
+
+    for _, airfieldName in ipairs(AirfieldNames) do
         local airfield = AIRBASE:FindByName(airfieldName)
         if airfield then
             local airfieldPosition = airfield:GetVec2()
             local referenceAirfieldPosition = AIRBASE:FindByName(referenceAirfield):GetVec2()
-            --
             if airfieldPosition.y < referenceAirfieldPosition.y then
                 table.insert(redAirfields, airfieldName)
                 redAirfieldszoneset:AddZone(airfield:GetZone())
-
             else
                 table.insert(blueAirfields, airfieldName)
                 blueAirfieldszoneset:AddZone(airfield:GetZone())
@@ -412,24 +638,29 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
 
     -- Check if conditions are met before adding squadrons
     if parkingData.aircraftParkingCount > 10 then
-        local SQN1 = SQUADRON:New("F-4Phantom", 4, GenerateUniqueSquadronName("Fighter Squadron"))
+        local SQN1 = SQUADRON:New("F-4Phantom", 4, GenerateUniqueSquadronName("Blue Fighter Squadron"))
         SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.SEAD, AUFTRAG.Type.CAS,AUFTRAG.Type.CASENHANCED, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING})
         SQN1:SetDespawnAfterHolding()
         SQN1:SetDespawnAfterLanding()
+        SQN1:SetTakeoffHot()
         airwing:AddSquadron(SQN1)
-        :SetDespawnAfterLanding()
 
-        local SQN2 = SQUADRON:New("F-5E", 2, GenerateUniqueSquadronName("Light Fighter Squadron"))
+
+        local SQN2 = SQUADRON:New("F-5E", 2, GenerateUniqueSquadronName("Blue Light Fighter Squadron"))
         SQN2:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
         SQN2:SetDespawnAfterHolding()
         SQN2:SetDespawnAfterLanding()
+        SQN2:SetTakeoffHot()
         airwing:AddSquadron(SQN2)
 
-        local SQN3 = SQUADRON:New("A-10", 2, GenerateUniqueSquadronName("Attack Squadron"))
+        local SQN3 = SQUADRON:New("A-10", 2, GenerateUniqueSquadronName("Blue Attack Squadron"))
         SQN3:AddMissionCapability({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED})
         SQN3:SetDespawnAfterHolding()
         SQN3:SetDespawnAfterLanding()
+        SQN3:SetTakeoffHot()
+
         airwing:AddSquadron(SQN3)
+
 
         airwing:NewPayload(GROUP:FindByName("F-4Phantom_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 80)
         airwing:NewPayload(GROUP:FindByName("F-4Phantom_SEAD"), 4, {AUFTRAG.Type.SEAD})
@@ -443,13 +674,15 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     end
 
     if parkingData.heliParkingCount > 1 or parkingData.aircraftParkingCount > 1 then
-        local SQN4 = SQUADRON:New("UH-1", 4, GenerateUniqueSquadronName("Rotary Squadron"))
+        local SQN4 = SQUADRON:New("UH-1", 4, GenerateUniqueSquadronName("Blue Rotary Squadron"))
         SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
         SQN4:SetDespawnAfterHolding()
         SQN4:SetDespawnAfterLanding()
+        SQN4:SetTakeoffHot()
         airwing:AddSquadron(SQN4)
         airwing:NewPayload(GROUP:FindByName("UH-1_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
         airwing:NewPayload(GROUP:FindByName("UH-1_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
+
     else
         env.info("Not enough helicopter parking spots at " .. airfieldName)
     end
@@ -461,26 +694,26 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     -- Set spawn zone.
     Brigade:SetSpawnZone(airbase:GetZone())
         -- TPz Fuchs platoon.
-    local platoonAPC=PLATOON:New(Group_Blue_APC, 5, GenerateUniqueSquadronName("Motorised"))
+    local platoonAPC=PLATOON:New(Group_Blue_APC, 5, GenerateUniqueSquadronName("Blue Motorised"))
     platoonAPC:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD}, 60):SetAttribute(GROUP.Attribute.GROUND_APC)
         -- Mechanised platoon
-    local platoonMECH=PLATOON:New(Group_Blue_Mech, 5, GenerateUniqueSquadronName("Mechanised"))
+    local platoonMECH=PLATOON:New(Group_Blue_Mech, 5, GenerateUniqueSquadronName("Blue Mechanised"))
     platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD}, 70)
     platoonMECH:AddWeaponRange(UTILS.KiloMetersToNM(0.5), UTILS.KiloMetersToNM(20))
         -- Armoured platoon
-    local platoonArmoured =PLATOON:New(Group_Blue_Armoured, 5, GenerateUniqueSquadronName("Armoured"))
+    local platoonArmoured =PLATOON:New(Group_Blue_Armoured, 5, GenerateUniqueSquadronName("Blue Armoured"))
     platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
         -- Arty platoon.
-    local platoonARTY=PLATOON:New(Group_Blue_Arty, 2, GenerateUniqueSquadronName("Artillary"))
+    local platoonARTY=PLATOON:New(Group_Blue_Arty, 2, GenerateUniqueSquadronName("Blue Artillary"))
     platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
     platoonARTY:AddWeaponRange(UTILS.KiloMetersToNM(10), UTILS.KiloMetersToNM(32)):SetAttribute(GROUP.Attribute.GROUND_ARTILLERY)
         -- M939 Truck platoon. Can provide ammo in DCS.
-    local platoonLogi=PLATOON:New(Group_Blue_Truck, 5, GenerateUniqueSquadronName("Logistics"))
+    local platoonLogi=PLATOON:New(Group_Blue_Truck, 5, GenerateUniqueSquadronName("Blue Logistics"))
     platoonLogi:AddMissionCapability({AUFTRAG.Type.AMMOSUPPLY}, 70)
-    local platoonINF=PLATOON:New(Group_Blue_Inf, 5, GenerateUniqueSquadronName("Platoon"))
+    local platoonINF=PLATOON:New(Group_Blue_Inf, 5, GenerateUniqueSquadronName("Blue Platoon"))
     platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
         -- mobile SAM
-    local platoonSAM=PLATOON:New(Group_Blue_SAM, 5, GenerateUniqueSquadronName("Sam"))
+    local platoonSAM=PLATOON:New(Group_Blue_SAM, 5, GenerateUniqueSquadronName("Blue SAM"))
     platoonINF:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
    
     -- Add platoons.
@@ -535,19 +768,22 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
         return
     end
     if parkingData.aircraftParkingCount > 10 then
-    local SQN1 = SQUADRON:New("Mig-21", 4, GenerateUniqueSquadronName("Fighter Squadron"))
+    local SQN1 = SQUADRON:New("Mig-21", 4, GenerateUniqueSquadronName("Red Fighter Squadron"))
     SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.SEAD, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED})
     SQN1:SetDespawnAfterHolding()
     SQN1:SetDespawnAfterLanding()
-    local SQN2 = SQUADRON:New("SU-25", 2, GenerateUniqueSquadronName("Attack Squadron"))
+    SQN1:SetTakeoffHot()
+    local SQN2 = SQUADRON:New("SU-25", 2, GenerateUniqueSquadronName("Red Attack Squadron"))
     SQN2:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
     SQN2:SetDespawnAfterHolding()
     SQN2:SetDespawnAfterLanding()
+    SQN2:SetTakeoffHot()
 
-    local SQN3 = SQUADRON:New("Mig-19", 2, GenerateUniqueSquadronName("Light Fighter Squadron"))
+    local SQN3 = SQUADRON:New("Mig-19", 2, GenerateUniqueSquadronName("Red Light Fighter Squadron"))
     SQN3:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING})
     SQN3:SetDespawnAfterHolding()
     SQN3:SetDespawnAfterLanding()
+    SQN3:SetTakeoffHot()
 
     airwing:NewPayload(GROUP:FindByName("Mig-19_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT})
     airwing:NewPayload(GROUP:FindByName("Mig-21_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 80)
@@ -563,10 +799,11 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     env.info("Not enough aircraft parking spots at " .. airfieldName)
     end
     if parkingData.heliParkingCount > 1 or parkingData.aircraftParkingCount > 1 then
-    local SQN4 = SQUADRON:New("MI-8", 8, GenerateUniqueSquadronName("Rotary Squadron"))
+    local SQN4 = SQUADRON:New("MI-8", 8, GenerateUniqueSquadronName("Red Rotary Squadron"))
     SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
     SQN4:SetDespawnAfterHolding()
     SQN4:SetDespawnAfterLanding()
+    SQN4:SetTakeoffHot()
     airwing:AddSquadron(SQN4)
     airwing:NewPayload(GROUP:FindByName("MI-8_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
     airwing:NewPayload(GROUP:FindByName("MI-8_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
@@ -580,26 +817,26 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     -- Set spawn zone.
     Brigade:SetSpawnZone(airbase:GetZone())
         -- TPz Fuchs platoon.
-        local platoonAPC=PLATOON:New(Group_Red_APC, 5, GenerateUniqueSquadronName("Motorised"))
+        local platoonAPC=PLATOON:New(Group_Red_APC, 5, GenerateUniqueSquadronName("Red Motorised"))
         platoonAPC:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD}, 60):SetAttribute(GROUP.Attribute.GROUND_APC)
             -- Mechanised platoon
-        local platoonMECH=PLATOON:New(Group_Red_Mech, 5, GenerateUniqueSquadronName("Mechanised"))
+        local platoonMECH=PLATOON:New(Group_Red_Mech, 5, GenerateUniqueSquadronName("Red Mechanised"))
         platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD}, 70)
         platoonMECH:AddWeaponRange(UTILS.KiloMetersToNM(0.5), UTILS.KiloMetersToNM(20))
             -- Armoured platoon
-        local platoonArmoured =PLATOON:New(Group_Red_Armoured, 5, GenerateUniqueSquadronName("Armoured"))
+        local platoonArmoured =PLATOON:New(Group_Red_Armoured, 5, GenerateUniqueSquadronName("Red Armoured"))
         platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
             -- Arty platoon.
-        local platoonARTY=PLATOON:New(Group_Red_Arty, 2, GenerateUniqueSquadronName("Artilliary"))
+        local platoonARTY=PLATOON:New(Group_Red_Arty, 2, GenerateUniqueSquadronName("Red Artilliary"))
         platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
         platoonARTY:AddWeaponRange(UTILS.KiloMetersToNM(10), UTILS.KiloMetersToNM(32)):SetAttribute(GROUP.Attribute.GROUND_ARTILLERY)
             -- M939 Truck platoon. Can provide ammo in DCS.
-        local platoonLogi=PLATOON:New(Group_Red_Truck, 5, GenerateUniqueSquadronName("Logistics"))
+        local platoonLogi=PLATOON:New(Group_Red_Truck, 5, GenerateUniqueSquadronName("Red Logistics"))
         platoonLogi:AddMissionCapability({AUFTRAG.Type.AMMOSUPPLY}, 70)
-        local platoonINF=PLATOON:New(Group_Red_Inf, 5, GenerateUniqueSquadronName("Platoon"))
+        local platoonINF=PLATOON:New(Group_Red_Inf, 5, GenerateUniqueSquadronName("Red Platoon"))
         platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
             -- mobile SAM
-        local platoonSAM=PLATOON:New(Group_Red_SAM, 5, GenerateUniqueSquadronName("Sam"))
+        local platoonSAM=PLATOON:New(Group_Red_SAM, 5, GenerateUniqueSquadronName("Red SAM"))
         platoonINF:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
     
     
@@ -650,7 +887,11 @@ end
 --------------------------------------Begin Chief functions-------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
-
+local CapZone1 = ZONE:FindByName("CAP_Zone_E")
+local CapZone2 = ZONE:FindByName("CAP_Zone_SE")
+local CapZone3 = ZONE:FindByName("CAP_Zone_Mid")
+local CapZone4 = ZONE:FindByName("CAP_Zone_Mid")
+local CapZone5 = ZONE:FindByName("CAP_Zone_W")
 
 ---
 -- CHIEF OF STAFF
@@ -724,11 +965,17 @@ function CreateBlueChief()
     --RedIntel:SetVerbosity(2)
     BlueIntel:__Start(2)
 
-    --allOpsZones:ForEachZone(
-    --function(opzone)
-    --    BlueChief:AddStrategicZone(opzone, nil, nil, nil, ResourceListEmpty)
-    --end
-    --)
+    BlueChief:AddCapZone(CapZone1,26000,400,180,25)
+    BlueChief:AddCapZone(CapZone2,26000,400,180,25)
+    BlueChief:AddCapZone(CapZone3,26000,400,180,25)
+    BlueChief:AddBorderZone(CapZone1)
+    BlueChief:AddBorderZone(CapZone2)
+    BlueChief:AddBorderZone(CapZone3)
+    BlueChief:AddConflictZone(CapZone4)
+    BlueChief:AddConflictZone(CapZone5)
+    BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.AIRCRAFT, AUFTRAG.Type.INTERCEPT, 1)
+    BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.BAI, 1)
+    BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.ARMOUREDATTACK, 4)
 
 end
 
@@ -794,72 +1041,20 @@ function CreateRedChief()
     RedIntel:SetClusterAnalysis(true, true)
     --RedIntel:SetVerbosity(2)
     RedIntel:__Start(2)
+    
 
+    RedChief:AddCapZone(CapZone3,26000,400,180,25)
+    RedChief:AddCapZone(CapZone4,26000,400,180,25)
+    RedChief:AddCapZone(CapZone5,26000,400,180,25)
+    RedChief:AddConflictZone(CapZone1)
+    RedChief:AddConflictZone(CapZone2)
+    RedChief:AddBorderZone(CapZone3)
+    RedChief:AddBorderZone(CapZone4)
+    RedChief:AddBorderZone(CapZone5)
+    RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.BAI, 1)
+    RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.ARMOUREDATTACK, 4)
+    RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.AIRCRAFT, AUFTRAG.Type.INTERCEPT, 1)
 end
-
-CreateBlueChief()
-CreateRedChief()
--- Add Airwings as assets to the Chief
-
-
-
- RedChief:__Start(1)
- BlueChief:__Start(1)
-
-
-local CapZone1 = ZONE:FindByName("CAP_Zone_E")
-local CapZone2 = ZONE:FindByName("CAP_Zone_SE")
-local CapZone3 = ZONE:FindByName("CAP_Zone_Mid")
-local CapZone4 = ZONE:FindByName("CAP_Zone_Mid")
-local CapZone5 = ZONE:FindByName("CAP_Zone_W")
-
-
-
-BlueChief:AddCapZone(CapZone1,26000,400,180,25)
-BlueChief:AddCapZone(CapZone2,26000,400,180,25)
-BlueChief:AddCapZone(CapZone3,26000,400,180,25)
-RedChief:AddCapZone(CapZone3,26000,400,180,25)
-RedChief:AddCapZone(CapZone4,26000,400,180,25)
-RedChief:AddCapZone(CapZone5,26000,400,180,25)
-BlueChief:AddBorderZone(CapZone1)
-BlueChief:AddBorderZone(CapZone2)
-BlueChief:AddBorderZone(CapZone3)
-BlueChief:AddConflictZone(CapZone4)
-BlueChief:AddConflictZone(CapZone5)
-RedChief:AddConflictZone(CapZone1)
-RedChief:AddConflictZone(CapZone2)
-RedChief:AddBorderZone(CapZone3)
-RedChief:AddBorderZone(CapZone4)
-RedChief:AddBorderZone(CapZone5)
-
---function BlueChief:OnAfterNewContact(From, Event, To, Contact)
---    
----- Gather info of contact.
---local ContactName=BlueChief:GetContactName(Contact)
---local ContactType=BlueChief:GetContactTypeName(Contact)
---local ContactThreat=BlueChief:GetContactThreatlevel(Contact)
---
----- Text message.
---local text=string.format("Detected NEW contact: Name=%s, Type=%s, Threat Level=%d", ContactName, ContactType, ContactThreat)
---
----- Show message in log file.
---env.info(text)
---
---end
-
-
-BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.AIRCRAFT, AUFTRAG.Type.INTERCEPT, 1)
-RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.AIRCRAFT, AUFTRAG.Type.INTERCEPT, 1)
-BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.BAI, 1)
-RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.BAI, 1)
-BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.ARMOUREDATTACK, 4)
-RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.ARMOUREDATTACK, 4)
-
----Sort the airfields into red and blue, then deploy forces.
-
-
---Start OPS Zones as a zone set. ensure this is called after creating all zones.
-
 
 env.info("Ops Zones Started")
 
@@ -890,10 +1085,6 @@ function DeployForces()
         end
     end
 end
-
---Sort the airfields and deploy garrision forces.
-sortairfields()
-DeployForces()
 
 
 -- Warehouse Filtering collect all warehouses for use later.
@@ -961,29 +1152,47 @@ function deployairwings()
     )
 end
 
-deployairwings()
---function checkopszones()
---
---end
+----------------------------------------------------------------------------
+----------------------------------------------------------------------------
+----------------------------Start Mission-----------------------------------
+----------------------------------------------------------------------------
+----------------------------------------------------------------------------
+
+local function initializeMission()
+    local unitLocationsFile = filepath .. "unit_locations_in_zones.lua"
+    local staticObjectsFile = filepath .. "static_objects.lua"
+    local airfieldsFile = filepath .. "airfields.lua"
+
+    -- Ensure the directory exists
+    createDirectory(filepath)
+
+    -- Initialize chiefs
+    CreateBlueChief()
+    CreateRedChief()
+
+    if lfs.attributes(unitLocationsFile) and lfs.attributes(staticObjectsFile) and lfs.attributes(airfieldsFile) then
+        loadAirfields()
+        loadSavedData()
+        deployairwings()
+    else
+        -- Call your functions to spawn groups and assets fresh
+        sortairfields()
+        DeployForces()
+        deployairwings()
+    end
+end
+
+-- Call the initialize function at mission start
+initializeMission()
+RedChief:__Start(1)
+BlueChief:__Start(1)
 
 OPS_Zones = SET_OPSZONE:New():FilterOnce()
 OPS_Zones:Start()
 
-local deployairwingsSchedule = SCHEDULER:New( nil, deployairwings(),{}, 5  )
-deployairwingsSchedule:Start()
-
-
--- Example usage: Log all assets in the warehouse named "warehouse_Airfield1"
-
-----------------------------------
-----------------------------------
---Test Capture Zone Functions-----
-----------------------------------
-----------------------------------
----just checking ops zones -----
 
 function monitoropszones()
-    allOpsZones:ForEachZone(function(opszone)
+    OPS_Zones:ForEachZone(function(opszone)
         env.info("Monitoring OPSZONE: " .. opszone:GetName())
         
         function opszone:OnAfterCaptured(From, Event, To, Coalition)
@@ -1040,7 +1249,239 @@ function monitoropszones()
         end
     end)
 end
+----------------------------------
+----------------------------------
+---------PLayer Tasking ----------
+function PlayerTaskingBlue()
+    -- Settings - we want players to have a settings menu, be on imperial measures, and get directions as BR
+    _SETTINGS:SetPlayerMenuOn()
+    _SETTINGS:SetImperial()
+    _SETTINGS:SetA2G_BR()
+   
+    -- Set up the A2G task controller for the blue side named "82nd Airborne"
+    BlueTaskManagerA2G = PLAYERTASKCONTROLLER:New("82 Airbourne",coalition.side.Blue,PLAYERTASKCONTROLLER.Type.A2G)
+   
+    -- set locale to English
+    BlueTaskManagerA2G:SetLocale("en")
+   
+    -- Set up detection with grup names *containing* "Blue Recce", these will add targets to our controller via detection. Can be e.g. a drone.
+    BlueTaskManagerA2G:SetupIntel("Blue")
+   
+    -- Add a single Recce group name "Blue Humvee"
+    --RedTaskManager:AddAgent(GROUP:FindByName("Blue"))
+   
+    -- Set the callsign for SRS and Menu name to be "Groundhog"
+    BlueTaskManagerA2G:SetMenuName("Ghost Bat")
+   
+    -- Add accept- and reject-zones for detection
+    -- Accept zones are handy to limit e.g. the engagement to a certain zone. The example is a round, mission editor created zone named "AcceptZone"
+    BlueTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_E"))
+    BlueTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_SE"))
+    BlueTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_Mid"))
+    BlueTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_W"))
+    BlueTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_SW"))
+   
+    -- Reject zones are handy to create borders. The example is a ZONE_POLYGON, created in the mission editor, late activated with waypoints, 
+    -- named "AcceptZone#ZONE_POLYGON"
+    --BlueTaskManager:AddRejectZone(ZONE:FindByName("RejectZone"))
+   
+    -- Set up using SRS for messaging
+   --local hereSRSPath = "C:\\Program Files\\DCS-SimpleRadio-Standalone"
+   --local hereSRSPort = 5002
+    -- local hereSRSGoogle = "C:\\Program Files\\DCS-SimpleRadio-Standalone\\yourkey.json"
+    BlueTaskManagerA2G:SetSRS({130,255},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+   
+    -- Controller will announce itself under these broadcast frequencies, handy to use cold-start frequencies here of your aircraft
+    BlueTaskManagerA2G:SetSRSBroadcast({130,255},{radio.modulation.AM,radio.modulation.AM})
+   
+    -- Example: Manually add an AIRBASE as a target
+    --BlueTaskManagerA2G:AddTarget(AIRBASE:FindByName(AIRBASE.Caucasus.Senaki_Kolkhi))
+   
+    -- Example: Manually add a COORDINATE as a target
+    --BlueTaskManagerA2G:AddTarget(GROUP:FindByName("Scout Coordinate"):GetCoordinate())
+   
+    -- Set a whitelist for tasks
+    BlueTaskManagerA2G:SetTaskWhiteList({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING, AUFTRAG.Type.BOMBRUNWAY, AUFTRAG.Type.SEAD,AUFTRAG.Type.INTERCEPT,AUFTRAG.Type.CAP})
+   
+    -- Set target radius
+    BlueTaskManagerA2G:SetTargetRadius(1000)
+    BlueTaskManagerA2G:Verbose()
+end
+   
+function PlayerTaskingRed()
+    -- Settings - we want players to have a settings menu, be on imperial measures, and get directions as BR
+  --_SETTINGS:SetPlayerMenuOn()
+  --_SETTINGS:SetImperial()
+  --_SETTINGS:SetA2G_BR()
+   
+    -- Set up the A2G task controller for the blue side named "82nd Airborne"
+    RedTaskManagerA2G = PLAYERTASKCONTROLLER:New("31st Infantry",coalition.side.RED,PLAYERTASKCONTROLLER.Type.A2G)
+   
+    -- set locale to English
+    RedTaskManagerA2G:SetLocale("en")
+   
+    -- Set up detection with grup names *containing* "Blue Recce", these will add targets to our controller via detection. Can be e.g. a drone.
+    RedTaskManagerA2G:SetupIntel("Red")
+   
+    -- Add a single Recce group name "Blue Humvee"
+    --RedTaskManager:AddAgent(GROUP:FindByName("Blue"))
+   
+    -- Set the callsign for SRS and Menu name to be "Groundhog"
+    RedTaskManagerA2G:SetMenuName("SnakeEyes")
+   
+    -- Add accept- and reject-zones for detection
+    -- Accept zones are handy to limit e.g. the engagement to a certain zone. The example is a round, mission editor created zone named "AcceptZone"
+    RedTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_E"))
+    RedTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_SE"))
+    RedTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_Mid"))
+    RedTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_W"))
+    RedTaskManagerA2G:AddAcceptZone(ZONE:New("CAP_Zone_SW"))
+   
+    -- Reject zones are handy to create borders. The example is a ZONE_POLYGON, created in the mission editor, late activated with waypoints, 
+    -- named "AcceptZone#ZONE_POLYGON"
+    --BlueTaskManager:AddRejectZone(ZONE:FindByName("RejectZone"))
+   
+    -- Set up using SRS for messaging
+   --local hereSRSPath = "C:\\Program Files\\DCS-SimpleRadio-Standalone"
+   --local hereSRSPort = 5002
+    -- local hereSRSGoogle = "C:\\Program Files\\DCS-SimpleRadio-Standalone\\yourkey.json"
+    RedTaskManagerA2G:SetSRS({130,225},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+   
+    -- Controller will announce itself under these broadcast frequencies, handy to use cold-start frequencies here of your aircraft
+    RedTaskManagerA2G:SetSRSBroadcast({127,225},{radio.modulation.AM,radio.modulation.AM})
+   
+    -- Example: Manually add an AIRBASE as a target
+    --RedTaskManagerA2G:AddTarget(AIRBASE:FindByName(AIRBASE.Caucasus.Senaki_Kolkhi))
+   
+    -- Example: Manually add a COORDINATE as a target
+    --RedTaskManagerA2G:AddTarget(GROUP:FindByName("Scout Coordinate"):GetCoordinate())
+   
+    -- Set a whitelist for tasks
+    RedTaskManagerA2G:SetTaskWhiteList({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING, AUFTRAG.Type.BOMBRUNWAY, AUFTRAG.Type.SEAD,AUFTRAG.Type.INTERCEPT,AUFTRAG.Type.CAP})
+   
+    -- Set target radius
+    RedTaskManagerA2G:SetTargetRadius(1000)
+    RedTaskManagerA2G:Verbose()
+end
+------------------------------------------
+------------------------------------------
+--------- End Player Tasking--------------
+------------------------------------------
+------------------------------------------
+-------------
+-----CTLD----
+-------------
+function BlueOpsCTLD()
+    env.info(string.format("###Blue CTLD FILE Start Load ###"))
+    
+    SETTINGS:SetPlayerMenuOff()
+    
+       Blue_ctld = CTLD:New(coalition.side.BLUE,nil,"23rd Transport Squadron")
+    
+       Blue_ctld:SetOwnSetPilotGroups(SET_GROUP:New():FilterCoalitions("blue"):FilterCategoryHelicopter():FilterFunction(
+        function(grp)
+        local _type = grp:GetTypeName()
+        local retval = false
+        if _type == "CH-47Fbl1" or _type == "UH-1H" or _type == "Mi-8MT" or _type == "Mi-8MTV2" or _type == "Mi-24P" or _type == "UH-60L"   then
+            retval = true;
+        end
+        return retval
+        end ):FilterStart())
+       
+       Blue_ctld.maximumHoverHeight = 35
+       Blue_ctld.forcehoverload = false
+       Blue_ctld.dropcratesanywhere = true
+       Blue_ctld.buildtime = 10
+       Blue_ctld:UnitCapabilities("UH-1H", true, true, 2, 12, 15, 3000)
+       Blue_ctld:UnitCapabilities("MI-24P", true, true, 2, 12, 15, 3000)
+       Blue_ctld:UnitCapabilities("MI-24V", true, true, 2, 12, 15, 3000)
+       Blue_ctld:UnitCapabilities("CH-47", true, true, 8, 24, 30, 7200)
+    
+       Blue_ctld:__Start(5)
+    
+       -- add infantry unit called "Anti-Tank Small" using template "ATS", of type TROOP with size 3
+       -- infantry units will be loaded directly from LOAD zones into the heli (matching number of free seats needed)
+          Blue_ctld:AddTroopsCargo("Infantry Squad",{Group_Blue_Inf},CTLD_CARGO.Enum.TROOPS,3)
+    
+       -- add infantry unit called "Anti-Tank" using templates "AA" and "AA"", of type TROOP with size 4. No weight. We only have 2 in stock:
+          Blue_ctld:AddTroopsCargo("Anti-Air",{Group_Blue_SAM},CTLD_CARGO.Enum.TROOPS,3,nil)
+          
+          Blue_ctld:AddTroopsCargo("M113",{Group_Blue_APC},CTLD_CARGO.Enum.TROOPS,4,nil)
+          Blue_ctld:AddTroopsCargo("SHORAD",{Group_Blue_SAM},CTLD_CARGO.Enum.TROOPS,4,nil)
+    --      Blue_ctld:AddTroopsCargo("Mechanised",{"Blue_Mech_Marder_Template","Ground_Blue_SPG_Stryker"},CTLD_CARGO.Enum.TROOPS,8,nil)
+    
+    
+          -- add an engineers unit called "Wrenches" using template "Engineers", of type ENGINEERS with size 2. Engineers can be loaded, dropped,
+       -- and extracted like troops. However, the will seek to build and/or repair crates found in a given radius. Handy if you can\'t stay
+       -- to build or repair or under fire.
+          Blue_ctld:AddTroopsCargo("Wrenches",{"Blue_CTLD_Wrenches"},CTLD_CARGO.Enum.ENGINEERS,4)
+          Blue_ctld.EngineerSearch = 2000 -- teams will search for crates in this radius.
+    
+          -- add vehicle called "Humvee" using template "Humvee", of type VEHICLE, size 2, i.e. needs two crates to be build
+       -- vehicles and FOB will be spawned as crates in a LOAD zone first. Once transported to DROP zones, they can be build into the objects
+          Blue_ctld:AddCratesCargo("Marder Group",{Group_Blue_Mech},CTLD_CARGO.Enum.VEHICLE,2,500)
+       -- if you want to add weight to your Heli, crates can have a weight in kg **per crate**. Fly carefully.
+          Blue_ctld:AddCratesCargo("Hawk_Site", {Group_Blue_SAM_Site},CTLD_CARGO.Enum.VEHICLE,8,500)
+       -- if you want to add weight to your Heli, crates can have a weight in kg **per crate**. Fly carefully.
+          --Blue_ctld:AddCratesCargo("NASAM",{"Blue_NASAM_Template"},CTLD_CARGO.Enum.VEHICLE,18)
+       -- if you want to add weight to your Heli, crates can have a weight in kg **per crate**. Fly carefully.
+          Blue_ctld:AddCratesCargo("Leopard Group",{Group_Blue_Armoured},CTLD_CARGO.Enum.VEHICLE,4,500)
+          Blue_ctld:AddCratesCargo("M109 Group",{Group_Blue_Arty},CTLD_CARGO.Enum.VEHICLE,2,500)
+       -- if you want to add weight to your Heli, crates can have a weight in kg **per crate**. Fly carefully.
+       -- add infantry unit called "Forward Ops Base" using template "FOB", of type FOB, size 4, i.e. needs four crates to be build:
+          Blue_ctld:AddCratesCargo("Forward Ops Base",{"Blue_CTLD_FOB"},CTLD_CARGO.Enum.FOB,4)
+    
+       -- add crates to repair FOB or VEHICLE type units - the 2nd parameter needs to match the template you want to repair,
+       -- e.g. the "Humvee" here refers back to the "Humvee" crates cargo added above (same template!)
+          Blue_ctld:AddCratesRepair("Humvee Repair","Blue_Unarmed_Humvee_Template",CTLD_CARGO.Enum.REPAIR,1)
+          Blue_ctld.repairtime = 300 -- takes 300 seconds to repair something
+    
+       -- add static cargo objects, e.g ammo chests - the name needs to refer to a STATIC object in the mission editor, 
+       -- here: it\'s the UNIT name (not the GROUP name!), the second parameter is the weight in kg.
+          --Blue_ctld:AddStaticsCargo("Blue_Ammo",500)
+    
+          blueAirfieldszoneset:ForEachZone(
+            function(zone)
+                local zonename = zone:GetName()
+                Blue_ctld:AddCTLDZone(zonename,CTLD.CargoZoneType.LOAD,SMOKECOLOR.Blue,true,true)
+              
+                env.info("Blue ZONE added to CTLD LOAD ZONE: " .. zone:GetName())
+            end
+        )  
+    
+          -- Add a zone of type LOAD to our setup. Players can load any troops and crates here as defined in 1.2 above.
+          -- "Loadzone" is the name of the zone from the ME. Players can load, if they are inside the zone.
+          -- Smoke and Flare color for this zone is blue, it is active (can be used) and has a radio beacon.
+           -- Add a zone of type DROP. Players can drop crates here.
+          -- Smoke and Flare color for this zone is blue, it is active (can be used) and has a radio beacon.
+          -- NOTE: Troops can be unloaded anywhere, also when hovering in parameters. 
+          --moved  to zone empty function 
+          --Blue_ctld:AddCTLDZone("Dropzone",CTLD.CargoZoneType.DROP,SMOKECOLOR.Red,true,true)
+    
+    function OPSTRANSPORT:OnAfterCruise(From, Event, To, OpsGroupCarrier)
+       OpsGroupCarrier:Cruise(25)
+     
+    end
+    
+    env.info(string.format("###Blue CTLD FILE Loaded Succesfully###"))
+    
+end
 
+BlueOpsCTLD()
+-------------
+-----CTLD----
+-------------
+------ Schedule functions properly
+timer.scheduleFunction(monitoropszones, {}, timer.getTime() + 12)
+timer.scheduleFunction(PlayerTaskingBlue, {}, timer.getTime() + 20)
+timer.scheduleFunction(PlayerTaskingRed, {}, timer.getTime() + 22)
+
+----------------------------------
+----------------------------------
+--Test Capture Zone Functions-----
+----------------------------------
+----------------------------------
+---just checking ops zones -----
 
 ----Used just to test a zone capture event by destroying all units.
 function destroyzonered()
@@ -1076,13 +1517,10 @@ function destroyzoneblue()
 end
 
 -- Schedule functions properly
-timer.scheduleFunction(monitoropszones, {}, timer.getTime() + 12)
-timer.scheduleFunction(destroyzonered, {}, timer.getTime() + 13)
-timer.scheduleFunction(destroyzoneblue, {}, timer.getTime() + 16)
---local destroyzoneredSchedule = SCHEDULER:New(nil, destroyzonered, {}, 12) -- No parentheses
---local destroyzoneblueSchedule = SCHEDULER:New(nil, destroyzoneblue, {}, 15) -- No parentheses
---destroyzoneredSchedule:Start()
---destroyzoneblueSchedule:Start()
+--timer.scheduleFunction(destroyzonered, {}, timer.getTime() + 13)
+--timer.scheduleFunction(destroyzoneblue, {}, timer.getTime() + 16)
+
+
 -----------------------------
 -----------------------------
 --------End TEstcode---------
