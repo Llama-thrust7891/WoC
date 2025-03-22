@@ -906,7 +906,7 @@ function CreateBlueChief()
 
     -- Define Blue Chief
     BlueChief = CHIEF:New(coalition.side.BLUE, BlueAgents)
-    BlueChief:SetTacticalOverviewOn()
+    --BlueChief:SetTacticalOverviewOn()
     BlueChief:SetVerbosity(5)
 
     -- Set strategy for Blue Chief
@@ -988,7 +988,7 @@ function CreateRedChief()
 
     -- Define Red Chief
       RedChief = CHIEF:New(coalition.side.RED, RedAgents)
-      RedChief:SetTacticalOverviewOn()
+     -- RedChief:SetTacticalOverviewOn()
       RedChief:SetVerbosity(5)
 
     -- Set strategy for Red Chief
