@@ -2039,7 +2039,7 @@ TIMER:New(function()
         end
     end
     
-end):Start(1 * 60, 1 * 60)
+end):Start(20 * 60, 20 * 60)
 
 TIMER:New(function()
     for warehouseName, airwing in pairs(RedAirwings) do
@@ -2063,7 +2063,7 @@ TIMER:New(function()
             Producebrigade(warehouseName, brigade, Coalition)
         end
     end
-end):Start(1 * 60, 1 * 60)
+end):Start(20 * 60, 20 * 60)
 
 
 -------------
