@@ -12,7 +12,7 @@ Group_Blue_Truck = "Blue_Truck_M939_Template"
 Blue_Fighter = "F-4Phantom"
 Blue_LT_Fighter = "F-5E"
 Blue_Attack = "A-10"
-Blue_Helo = "UH-1H"
+Blue_Helo = "UH-1"
 
 
 CW78_Blue_Groups = {Group_Blue_SAM_Site,Group_Blue_SAM,Group_Blue_Mech,Group_Blue_APC,Group_Blue_Armoured,Group_Blue_Inf,Group_Blue_Truck }

@@ -597,7 +597,7 @@ local function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDi
           end
      timer.scheduleFunction(spawnmessageblue, {}, timer.getTime() + 1)
      
-        if  parkingCount > 100 then
+        if  parkingCount > 80 then
         Spawn_Near_airbase(Group_Blue_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
     end
 
@@ -657,15 +657,11 @@ RedAirwings = {}
 BlueBrigades = {}
 RedBrigades ={}
 UsedSquadronNames = {} -- Global set to store used squadron names
-
+local blueawacscount = 0
+local redawacscount = 0
 -- Debug OP Zone Counts
 env.info("Blue Zones Count: " .. tostring(#blueAirfieldszones))
 env.info("Red Zones Count: " .. tostring(#redAirfieldszones))
-
-
-
-
-
 
 -- Helper function to generate a unique squadron name
 function GenerateUniqueSquadronName(baseName)
@@ -677,16 +673,14 @@ function GenerateUniqueSquadronName(baseName)
     return name
 end
 
-
-
-
 -- Function to create Blue Airwing 
 ---CreateBlueAirwing(warehouse, airwingName, airfieldName) for reference
 function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     local warehouseName = warehouse:GetName()
     local airfieldName = warehouseName:gsub("^warehouse_", "")
-    local airwingName = GenerateUniqueSquadronName("Blue Airwing " .. airfieldName)
+    local airwingName = "Blue Airwing " .. airfieldName
     local airwing = AIRWING:New(warehouseName, airwingName)
+    
     --airwing.squadrons = {} -- Ensure squadrons table is initialized
     airwing:SetAirbase(AIRBASE:FindByName(airfieldName))
     airwing:Start()
@@ -708,8 +702,25 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         env.info("No parking data available for " .. airfieldName)
         return
     end
-
+    
     -- Check if conditions are met before adding squadrons
+    if blueawacscount < 1 and parkingData.aircraftParkingCount > 100 then
+        env.info("Info: AWACS SQN Deployed to Airwing: "..airwing:GetName())
+
+        local BlueAWACSSquadron = SQUADRON:New("Blue_AWACS", 2, "Darkstar")
+        BlueAWACSSquadron:AddMissionCapability({AUFTRAG.Type.ORBIT,AUFTRAG.Type.AWACS}, 100)
+        BlueAWACSSquadron:SetFuelLowRefuel(true)
+        BlueAWACSSquadron:SetFuelLowThreshold(0.2)
+        BlueAWACSSquadron:SetTurnoverTime(10, 20)
+        BlueAWACSSquadron:SetTakeoffAir()
+
+        airwing:NewPayload(GROUP:FindByName("Blue_AWACS"), 2, {AUFTRAG.Type.ORBIT,AUFTRAG.Type.AWACS}, 100)
+        airwing:AddSquadron(BlueAWACSSquadron)
+        blueawacscount = blueawacscount + 1
+        BlueAwacsAirwing = airwing
+        BlueAwacsAirfieldName = airfieldName
+    end
+
     if parkingData.aircraftParkingCount > 10 then
         local SQN1NAME =  "Blue Fighter Squadron "..airfieldName
         local SQN1 = SQUADRON:New(Blue_Fighter, 4, SQN1NAME)
@@ -828,7 +839,7 @@ end
 function CreateRedAirwing(warehouse, airwingName, airfieldName)
     local warehouseName = warehouse:GetName()
     local airfieldName = warehouseName:gsub("^warehouse_", "")
-    local airwingName = GenerateUniqueSquadronName("Red Airwing " .. airfieldName)
+    local airwingName = "Red Airwing " .. airfieldName
     local airwing = AIRWING:New(warehouseName, airwingName)
     --airwing.squadrons = {} -- Ensure squadrons table is initialized
     airwing:SetAirbase(AIRBASE:FindByName(airfieldName))
@@ -850,6 +861,22 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
         env.info("No parking data available for " .. airfieldName)
         return
     end
+
+    if redawacscount < 1 and parkingData.aircraftParkingCount > 100  then
+        env.info("Info: AWACS SQN Deployed to Airwing: "..airwing:GetName())
+
+        local RedAWACSSquadron = SQUADRON:New("Red_AWACS", 2, "Magic")
+        RedAWACSSquadron:AddMissionCapability({AUFTRAG.Type.ORBIT,AUFTRAG.Type.AWACS}, 100)
+        RedAWACSSquadron:SetFuelLowRefuel(true)
+        RedAWACSSquadron:SetFuelLowThreshold(0.2)
+        RedAWACSSquadron:SetTurnoverTime(10, 20)
+        RedAWACSSquadron:SetTakeoffAir()
+        redawacscount = redawacscount + 1
+        RedAwacsAirwing = airwing
+        airwing:NewPayload(GROUP:FindByName("Red_AWACS"), 2, {AUFTRAG.Type.ORBIT,AUFTRAG.Type.AWACS}, 100)
+        airwing:AddSquadron(RedAWACSSquadron)
+    end
+
     if parkingData.aircraftParkingCount > 10 then
 
     local SQN1 = SQUADRON:New(Red_Fighter, 4, "Red Fighter Squadron "..airfieldName)
@@ -1599,7 +1626,7 @@ function RedOpsCTLD()
           -- add an engineers unit called "Wrenches" using template "Engineers", of type ENGINEERS with size 2. Engineers can be loaded, dropped,
        -- and extracted like troops. However, the will seek to build and/or repair crates found in a given radius. Handy if you can\'t stay
        -- to build or repair or under fire.
-          Red_ctld:AddTroopsCargo("Wrenches",{"Red_ctld_Wrenches"},CTLD_CARGO.Enum.ENGINEERS,4)
+          Red_ctld:AddTroopsCargo("Wrenches",{"Red_CTLD_Wrenches"},CTLD_CARGO.Enum.ENGINEERS,4)
           Red_ctld.EngineerSearch = 2000 -- teams will search for crates in this radius.
     
           -- add vehicle called "Humvee" using template "Humvee", of type VEHICLE, size 2, i.e. needs two crates to be build
@@ -2069,10 +2096,59 @@ end):Start(20 * 60, 20 * 60)
 -------------
 -----CTLD----
 -------------
------- Schedule functions properly
-timer.scheduleFunction(monitoropszones, {}, timer.getTime() + 12)
-timer.scheduleFunction(PlayerTaskingBlue, {}, timer.getTime() + 20)
-timer.scheduleFunction(PlayerTaskingRed, {}, timer.getTime() + 22)
+local function FindAirwingByAirfield(airfieldName)
+    for warehouseName, airwing in pairs(BlueAirwings) do
+        if string.find(warehouseName, airfieldName) then
+            env.info("Found airwing for airfield: " .. airfieldName)
+            return airwing
+        end
+    end
+    env.info("No airwing found for airfield: " .. airfieldName)
+    return nil
+end
+--------------------
+-------AI GCI--------
+--------------------
+-- Set up AWACS called "AWACS North". It will use the AwacsAW Airwing set up above and be of the "blue" coalition. Homebase is Kutaisi.
+-- The AWACS Orbit Zone is a round zone set in the mission editor named "Awacs Orbit", the FEZ is a Polygon-Zone called "Rock" we have also
+-- set up in the mission editor with a late activated helo named "Rock#ZONE_POLYGON". Note this also sets the BullsEye to be referenced as "Rock".
+-- The CAP station zone is called "Fremont". We will be on 255 AM.
+local Blueawacs = AWACS:New("Darkstar",BlueAwacsAirwing,"blue"    ,AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_E",ZONE:FindByName("Bulls"),"CAP_Zone_E",255,radio.modulation.AM )
+-- set one escort group; this example has two units in the template group, so they can fly a nice formation.
+Blueawacs:SetEscort(1,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+-- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
+Blueawacs:SetAwacsDetails(CALLSIGN.AWACS.Darkstar,1,30,300,88,25)
+-- Set up SRS on port 5010 - change the below to your path and port
+Blueawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","female","en-GB",5010)
+-- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
+--Blueawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
+-- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
+--Blueawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
+-- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
+Blueawacs:SetColdWar()
+-- And start
+Blueawacs:__Start(5)
+
+local Redawacs = AWACS:New("Magic",RedAwacsAirwing,"red",AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_W",ZONE:FindByName("Bulls"),"CAP_Zone_E",245,radio.modulation.AM )
+-- set one escort group; this example has two units in the template group, so they can fly a nice formation.
+Redawacs:SetEscort(1,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+-- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
+Redawacs:SetAwacsDetails(CALLSIGN.AWACS.Magic,1,30,300,88,25)
+-- Set up SRS on port 5010 - change the below to your path and port
+Redawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","female","en-GB",5010)
+-- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
+--Redawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
+-- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
+--Redawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
+-- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
+Redawacs:SetColdWar()
+-- And start
+Redawacs:__Start(5)
+---------------------
+---------------------
+--End AI GCI-----
+---------------------
+---------------------
 
 ----------------------------------
 ----------------------------------
