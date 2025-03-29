@@ -597,7 +597,10 @@ local function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDi
           end
      timer.scheduleFunction(spawnmessageblue, {}, timer.getTime() + 1)
      
-        if  parkingCount > 80 then
+     local parkingData = airbaseParkingSummary(airfieldName)
+      
+    
+     if  parkingData.aircraftParkingCount > 80 then
         Spawn_Near_airbase(Group_Blue_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
     end
 
@@ -624,9 +627,9 @@ local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDis
         end
    timer.scheduleFunction(spawnmessageRed, {}, timer.getTime() + 1)
     
-    
+    local parkingData = airbaseParkingSummary(airfieldName)
 
-     if parkingCount > 100 then
+     if parkingData.aircraftParkingCount > 100 then
          Spawn_Near_airbase(Group_Red_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
      end
  
@@ -1409,10 +1412,10 @@ function PlayerTaskingBlue()
    --local hereSRSPath = "C:\\Program Files\\DCS-SimpleRadio-Standalone"
    --local hereSRSPort = 5002
     -- local hereSRSGoogle = "C:\\Program Files\\DCS-SimpleRadio-Standalone\\yourkey.json"
-    BlueTaskManagerA2G:SetSRS({130,255},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+    BlueTaskManagerA2G:SetSRS({130,250},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
    
     -- Controller will announce itself under these broadcast frequencies, handy to use cold-start frequencies here of your aircraft
-    BlueTaskManagerA2G:SetSRSBroadcast({130,255},{radio.modulation.AM,radio.modulation.AM})
+    BlueTaskManagerA2G:SetSRSBroadcast({130,250},{radio.modulation.AM,radio.modulation.AM})
    
     -- Example: Manually add an AIRBASE as a target
     --BlueTaskManagerA2G:AddTarget(AIRBASE:FindByName(AIRBASE.Caucasus.Senaki_Kolkhi))
@@ -1465,10 +1468,10 @@ function PlayerTaskingRed()
    --local hereSRSPath = "C:\\Program Files\\DCS-SimpleRadio-Standalone"
    --local hereSRSPort = 5002
     -- local hereSRSGoogle = "C:\\Program Files\\DCS-SimpleRadio-Standalone\\yourkey.json"
-    RedTaskManagerA2G:SetSRS({130,225},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+    RedTaskManagerA2G:SetSRS({130,240},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
    
     -- Controller will announce itself under these broadcast frequencies, handy to use cold-start frequencies here of your aircraft
-    RedTaskManagerA2G:SetSRSBroadcast({127,225},{radio.modulation.AM,radio.modulation.AM})
+    RedTaskManagerA2G:SetSRSBroadcast({127,240},{radio.modulation.AM,radio.modulation.AM})
    
     -- Example: Manually add an AIRBASE as a target
     --RedTaskManagerA2G:AddTarget(AIRBASE:FindByName(AIRBASE.Caucasus.Senaki_Kolkhi))
@@ -2093,6 +2096,8 @@ TIMER:New(function()
 end):Start(20 * 60, 20 * 60)
 
 
+
+
 -------------
 -----CTLD----
 -------------
@@ -2149,6 +2154,8 @@ Redawacs:__Start(5)
 --End AI GCI-----
 ---------------------
 ---------------------
+TIMER:New(PlayerTaskingBlue()):Start(20)
+TIMER:New(PlayerTaskingRed()):Start(20)
 
 ----------------------------------
 ----------------------------------
