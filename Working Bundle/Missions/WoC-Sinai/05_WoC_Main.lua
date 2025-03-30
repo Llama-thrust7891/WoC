@@ -143,6 +143,67 @@ local function saveAirfields()
     end
 end
 
+local function exportAirwingToFile(airwing, fileName)
+    local filePath = filepath .. fileName
+    local file = io.open(filePath, "w")
+
+    if file then
+        file:write("airwing = {\n")
+        file:write("    name = \"" .. airwing:GetName() .. "\",\n")
+        file:write("    squadrons = {\n")
+        for squadronName, squadron in pairs(airwing.squadrons or {}) do
+            file:write("        [\"" .. squadronName .. "\"] = {\n")
+            file:write("            assetCount = " .. squadron:CountAssets() .. ",\n")
+            file:write("        },\n")
+        end
+        file:write("    },\n")
+        file:write("    payloads = {\n")
+        for payloadName, payload in pairs(airwing.payloads or {}) do
+            file:write("        [\"" .. payloadName .. "\"] = {\n")
+            file:write("            count = " .. payload.count .. ",\n")
+            file:write("        },\n")
+        end
+        file:write("    },\n")
+        file:write("}\n")
+        file:close()
+        trigger.action.outText("Airwing exported to " .. filePath, 10)
+    else
+        trigger.action.outText("Failed to export airwing to file", 10)
+    end
+end
+
+local function saveBlueAirwingsToFile()
+    local fileName = filepath .. "BlueAirwings.lua"
+    local file = io.open(fileName, "w")
+
+    if file then
+        file:write("BlueAirwings = {\n")
+        for warehouseName, airwing in pairs(BlueAirwings) do
+            file:write("    [\"" .. warehouseName .. "\"] = {\n")
+            file:write("        name = \"" .. airwing:GetName() .. "\",\n")
+            file:write("        squadrons = {\n")
+            for squadronName, squadron in pairs(airwing.squadrons or {}) do
+                file:write("            [\"" .. squadronName .. "\"] = {\n")
+                file:write("                assetCount = " .. squadron:CountAssets() .. ",\n")
+                file:write("            },\n")
+            end
+            file:write("        },\n")
+            file:write("        payloads = {\n")
+            for payloadName, payload in pairs(airwing.payloads or {}) do
+                file:write("            [\"" .. payloadName .. "\"] = {\n")
+                file:write("                count = " .. payload.count .. ",\n")
+                file:write("            },\n")
+            end
+            file:write("        },\n")
+            file:write("    },\n")
+        end
+        file:write("}\n")
+        file:close()
+        trigger.action.outText("BlueAirwings saved to " .. fileName, 10)
+    else
+        trigger.action.outText("Failed to save BlueAirwings to file", 10)
+    end
+end
 -- Schedule the functions to run periodically
 --mist.scheduleFunction(saveUnitLocationsInZones, {}, timer.getTime() + 10, 180) -- Runs every 300 seconds (5 minutes)
 --mist.scheduleFunction(saveStaticObjects, {}, timer.getTime() + 10, 120) -- Runs every 300 seconds (5 minutes)
@@ -222,11 +283,12 @@ end
 
 
 ---Start the main script for setting up the Wings of Conflict Mission--
+
 SamCount = 1
 MinDistance = 300
 MaxDistance = 1000
 --Coalition = "USA" --commented out only needed for testing
-
+---get airbases on the map---
 function getAllAirbaseNames()
     local airfields = {}  -- Correctly define this table
     
@@ -254,7 +316,7 @@ redAirfieldszoneset =  SET_ZONE:New()
 blueAirfieldszoneset = SET_ZONE:New()
 
 referenceAirfield = "Baluza"
-
+--Sort airfields into red and blue
 function sortairfields()
     if not blueAirfields or not redAirfields then
         blueAirfields = {}
@@ -276,7 +338,7 @@ function sortairfields()
         end
     end
 end
-
+--create  auftrag patrol mission for later use
 function AssignPatrolMission(GroupName, airfieldName)
     if not GroupName then
         env.info("ERROR: AssignPatrolMission - Group is nil!")
@@ -304,7 +366,7 @@ function AssignPatrolMission(GroupName, airfieldName)
     
     env.info("Assigned Patrol Mission to " .. group:GetName() .. " in zone: " .. airfieldName)
 end
-
+---spawning function for later use
 function Spawn_Near_airbase(GroupTemplate, airfieldName, Inner, Outer, Patrol)
     Patrol = Patrol ~= false -- Default to true if not explicitly set to false
     local Group = GROUP:FindByName(GroupTemplate) -- Find group by name in ME
@@ -412,7 +474,7 @@ local function airbaseParkingSummary(airfieldName)
         aircraftParkingCount = aircraftParkingCount
     }
 end
-
+--spawn static building warehouse with tents
 function SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
     local airbase = AIRBASE:FindByName(airfieldName)
     if not airbase then
@@ -535,7 +597,10 @@ local function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDi
           end
      timer.scheduleFunction(spawnmessageblue, {}, timer.getTime() + 1)
      
-        if  parkingCount > 100 then
+     local parkingData = airbaseParkingSummary(airfieldName)
+      
+    
+     if  parkingData.aircraftParkingCount > 80 then
         Spawn_Near_airbase(Group_Blue_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
     end
 
@@ -562,9 +627,9 @@ local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDis
         end
    timer.scheduleFunction(spawnmessageRed, {}, timer.getTime() + 1)
     
-    
+    local parkingData = airbaseParkingSummary(airfieldName)
 
-     if parkingCount > 100 then
+     if parkingData.aircraftParkingCount > 100 then
          Spawn_Near_airbase(Group_Red_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
      end
  
@@ -592,12 +657,14 @@ local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDis
 
 BlueAirwings = {}
 RedAirwings = {}
+BlueBrigades = {}
+RedBrigades ={}
 UsedSquadronNames = {} -- Global set to store used squadron names
-
+local blueawacscount = 0
+local redawacscount = 0
 -- Debug OP Zone Counts
 env.info("Blue Zones Count: " .. tostring(#blueAirfieldszones))
 env.info("Red Zones Count: " .. tostring(#redAirfieldszones))
-
 
 -- Helper function to generate a unique squadron name
 function GenerateUniqueSquadronName(baseName)
@@ -608,13 +675,16 @@ function GenerateUniqueSquadronName(baseName)
     UsedSquadronNames[name] = true
     return name
 end
+
 -- Function to create Blue Airwing 
 ---CreateBlueAirwing(warehouse, airwingName, airfieldName) for reference
 function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     local warehouseName = warehouse:GetName()
     local airfieldName = warehouseName:gsub("^warehouse_", "")
-    local airwingName = GenerateUniqueSquadronName("Blue Airwing " .. airfieldName)
+    local airwingName = "Blue Airwing " .. airfieldName
     local airwing = AIRWING:New(warehouseName, airwingName)
+    
+    --airwing.squadrons = {} -- Ensure squadrons table is initialized
     airwing:SetAirbase(AIRBASE:FindByName(airfieldName))
     airwing:Start()
     BlueAirwings[warehouseName] = airwing -- Store the airwing in the table
@@ -635,58 +705,81 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         env.info("No parking data available for " .. airfieldName)
         return
     end
-
+    
     -- Check if conditions are met before adding squadrons
+    if blueawacscount < 1 and parkingData.aircraftParkingCount > 100 then
+        env.info("Info: AWACS SQN Deployed to Airwing: "..airwing:GetName())
+
+        local BlueAWACSSquadron = SQUADRON:New("Blue_AWACS", 2, "Darkstar")
+        BlueAWACSSquadron:AddMissionCapability({AUFTRAG.Type.ORBIT,AUFTRAG.Type.AWACS}, 100)
+        BlueAWACSSquadron:SetFuelLowRefuel(true)
+        BlueAWACSSquadron:SetFuelLowThreshold(0.2)
+        BlueAWACSSquadron:SetTurnoverTime(10, 20)
+        BlueAWACSSquadron:SetTakeoffAir()
+
+        airwing:NewPayload(GROUP:FindByName("Blue_AWACS"), 2, {AUFTRAG.Type.ORBIT,AUFTRAG.Type.AWACS}, 100)
+        airwing:AddSquadron(BlueAWACSSquadron)
+        blueawacscount = blueawacscount + 1
+        BlueAwacsAirwing = airwing
+        BlueAwacsAirfieldName = airfieldName
+    end
+
     if parkingData.aircraftParkingCount > 10 then
-        local SQN1 = SQUADRON:New("F-4Phantom", 4, GenerateUniqueSquadronName("Blue Fighter Squadron"))
+        local SQN1NAME =  "Blue Fighter Squadron "..airfieldName
+        local SQN1 = SQUADRON:New(Blue_Fighter, 4, SQN1NAME)
         SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.SEAD, AUFTRAG.Type.CAS,AUFTRAG.Type.CASENHANCED, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING})
         SQN1:SetDespawnAfterHolding()
         SQN1:SetDespawnAfterLanding()
         SQN1:SetTakeoffHot()
         airwing:AddSquadron(SQN1)
+        
+       -- BlueAirwings.squadrons =SQN1
 
 
-        local SQN2 = SQUADRON:New("F-5E", 2, GenerateUniqueSquadronName("Blue Light Fighter Squadron"))
+        local SQN2 = SQUADRON:New(Blue_LT_Fighter, 2, "Blue Light Fighter Squadron "..airfieldName)
         SQN2:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
         SQN2:SetDespawnAfterHolding()
         SQN2:SetDespawnAfterLanding()
         SQN2:SetTakeoffHot()
         airwing:AddSquadron(SQN2)
+        
+       -- BlueAirwings.squadrons =SQN2
 
-        local SQN3 = SQUADRON:New("A-10", 2, GenerateUniqueSquadronName("Blue Attack Squadron"))
+        local SQN3 = SQUADRON:New(Blue_Attack, 2, "Blue Attack Squadron "..airfieldName)
         SQN3:AddMissionCapability({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED})
         SQN3:SetDespawnAfterHolding()
         SQN3:SetDespawnAfterLanding()
         SQN3:SetTakeoffHot()
-
         airwing:AddSquadron(SQN3)
+        -- BlueAirwings.squadrons =SQN3
 
 
-        airwing:NewPayload(GROUP:FindByName("F-4Phantom_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 80)
-        airwing:NewPayload(GROUP:FindByName("F-4Phantom_SEAD"), 4, {AUFTRAG.Type.SEAD})
-        airwing:NewPayload(GROUP:FindByName("F-4Phantom_Strike"), 4, {AUFTRAG.Type.BOMBING, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI},50)
-        airwing:NewPayload(GROUP:FindByName("F-5E_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT},80)
-        airwing:NewPayload(GROUP:FindByName("F-5E_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED},70)
-        airwing:NewPayload(GROUP:FindByName("A-10_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED},60)
+       Blue_payload_Fighter_AA= airwing:NewPayload(GROUP:FindByName(Blue_Fighter.."_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 80)
+       Blue_payload_Fighter_SEAD= airwing:NewPayload(GROUP:FindByName(Blue_Fighter.."_SEAD"), 4, {AUFTRAG.Type.SEAD})
+       Blue_payload_Fighter_Strike= airwing:NewPayload(GROUP:FindByName(Blue_Fighter.."_Strike"), 4, {AUFTRAG.Type.BOMBING, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI},50)
+       Blue_payload_LtFighter_AA= airwing:NewPayload(GROUP:FindByName(Blue_LT_Fighter.."_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT},80)
+       Blue_payload_LtFighter_CAS= airwing:NewPayload(GROUP:FindByName(Blue_LT_Fighter.."_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED},70)
+       Blue_payload_Attack_CAS =airwing:NewPayload(GROUP:FindByName(Blue_Attack.."_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED},60)
 
     else
         env.info("Not enough aircraft parking spots at " .. airfieldName)
     end
 
     if parkingData.heliParkingCount > 1 or parkingData.aircraftParkingCount > 1 then
-        local SQN4 = SQUADRON:New("UH-1", 4, GenerateUniqueSquadronName("Blue Rotary Squadron"))
+        local SQN4 = SQUADRON:New(Blue_Helo, 4, "Blue Transport Squadron "..airfieldName)
         SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
         SQN4:SetDespawnAfterHolding()
         SQN4:SetDespawnAfterLanding()
         SQN4:SetTakeoffHot()
         airwing:AddSquadron(SQN4)
-        airwing:NewPayload(GROUP:FindByName("UH-1_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
-        airwing:NewPayload(GROUP:FindByName("UH-1_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
+        -- BlueAirwings.squadrons =SQN4
+       local payload_helo_Trans = airwing:NewPayload(GROUP:FindByName(Blue_Helo.."_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
+       local payload_helo_CAS = airwing:NewPayload(GROUP:FindByName(Blue_Helo.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
 
     else
         env.info("Not enough helicopter parking spots at " .. airfieldName)
     end
-
+    
     BlueChief:AddAirwing(airwing)
     
     -- Create a Brigade
@@ -694,27 +787,27 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     -- Set spawn zone.
     Brigade:SetSpawnZone(airbase:GetZone())
         -- TPz Fuchs platoon.
-    local platoonAPC=PLATOON:New(Group_Blue_APC, 5, GenerateUniqueSquadronName("Blue Motorised"))
+    local platoonAPC=PLATOON:New(Group_Blue_APC, 5, "Blue Motorised Platoon "..airfieldName)
     platoonAPC:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD}, 60):SetAttribute(GROUP.Attribute.GROUND_APC)
         -- Mechanised platoon
-    local platoonMECH=PLATOON:New(Group_Blue_Mech, 5, GenerateUniqueSquadronName("Blue Mechanised"))
+    local platoonMECH=PLATOON:New(Group_Blue_Mech, 5,"Blue Mechanised Platoon "..airfieldName)
     platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD}, 70)
     platoonMECH:AddWeaponRange(UTILS.KiloMetersToNM(0.5), UTILS.KiloMetersToNM(20))
         -- Armoured platoon
-    local platoonArmoured =PLATOON:New(Group_Blue_Armoured, 5, GenerateUniqueSquadronName("Blue Armoured"))
-    platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
+    local platoonArmoured =PLATOON:New(Group_Blue_Armoured, 5,"Blue Armoured Platoon "..airfieldName)
+    platoonArmoured:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
         -- Arty platoon.
-    local platoonARTY=PLATOON:New(Group_Blue_Arty, 2, GenerateUniqueSquadronName("Blue Artillary"))
+    local platoonARTY=PLATOON:New(Group_Blue_Arty, 2, "Blue Artillary Platoon "..airfieldName)
     platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
     platoonARTY:AddWeaponRange(UTILS.KiloMetersToNM(10), UTILS.KiloMetersToNM(32)):SetAttribute(GROUP.Attribute.GROUND_ARTILLERY)
         -- M939 Truck platoon. Can provide ammo in DCS.
-    local platoonLogi=PLATOON:New(Group_Blue_Truck, 5, GenerateUniqueSquadronName("Blue Logistics"))
+    local platoonLogi=PLATOON:New(Group_Blue_Truck, 5, "Blue Logistics Platoon "..airfieldName)
     platoonLogi:AddMissionCapability({AUFTRAG.Type.AMMOSUPPLY}, 70)
-    local platoonINF=PLATOON:New(Group_Blue_Inf, 5, GenerateUniqueSquadronName("Blue Platoon"))
-    platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
+    --local platoonINF=PLATOON:New(Group_Blue_Inf, 5, "Blue Infantry Platoon "..airfieldName)
+    --platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
         -- mobile SAM
-    local platoonSAM=PLATOON:New(Group_Blue_SAM, 5, GenerateUniqueSquadronName("Blue SAM"))
-    platoonINF:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
+    local platoonSAM=PLATOON:New(Group_Blue_SAM, 5, "Blue SAM Platoon "..airfieldName)
+    platoonSAM:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
    
     -- Add platoons.
     Brigade:AddPlatoon(platoonAPC)
@@ -722,12 +815,13 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     Brigade:AddPlatoon(platoonArmoured)
     Brigade:AddPlatoon(platoonMECH)
     Brigade:AddPlatoon(platoonLogi)
-    Brigade:AddPlatoon(platoonINF)
+    --Brigade:AddPlatoon(platoonINF)
     Brigade:AddPlatoon(platoonSAM)
 
     -- Start brigade.
     Brigade:Start()
     BlueChief:AddBrigade(Brigade)
+    BlueBrigades[warehouseName] = Brigade 
     local ongaurdzone = airbase:GetZone()
     -- local onguardCoord = ongaurdzone:GetRandomCoordinate(nil, nil, {land.SurfaceType.LAND})
      local GaurdZone1 =AUFTRAG:NewONGUARD(ongaurdzone:GetRandomCoordinate(nil, nil, {land.SurfaceType.LAND}))
@@ -740,17 +834,20 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     --Brigade:AddMission(GaurdZone2)
     --Brigade:AddMission(GaurdZone3)
 
+    
+
 end
 
 -- Function to create Red Airwing
 function CreateRedAirwing(warehouse, airwingName, airfieldName)
     local warehouseName = warehouse:GetName()
     local airfieldName = warehouseName:gsub("^warehouse_", "")
-    local airwingName = GenerateUniqueSquadronName("Red Airwing " .. airfieldName)
+    local airwingName = "Red Airwing " .. airfieldName
     local airwing = AIRWING:New(warehouseName, airwingName)
+    --airwing.squadrons = {} -- Ensure squadrons table is initialized
     airwing:SetAirbase(AIRBASE:FindByName(airfieldName))
     airwing:Start()
-    RedAirwings[warehouseName] = airwing -- Store the airwing in the table
+    
     env.info(airwingName.. " added to Red Airwing list")  -- Log the report
     -- Get parking summary for the warehouse's airbase
     --local warehouseName = warehouse:GetName()
@@ -767,100 +864,118 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
         env.info("No parking data available for " .. airfieldName)
         return
     end
+
+    if redawacscount < 1 and parkingData.aircraftParkingCount > 100  then
+        env.info("Info: AWACS SQN Deployed to Airwing: "..airwing:GetName())
+
+        local RedAWACSSquadron = SQUADRON:New("Red_AWACS", 2, "Magic")
+        RedAWACSSquadron:AddMissionCapability({AUFTRAG.Type.ORBIT,AUFTRAG.Type.AWACS}, 100)
+        RedAWACSSquadron:SetFuelLowRefuel(true)
+        RedAWACSSquadron:SetFuelLowThreshold(0.2)
+        RedAWACSSquadron:SetTurnoverTime(10, 20)
+        RedAWACSSquadron:SetTakeoffAir()
+        redawacscount = redawacscount + 1
+        RedAwacsAirwing = airwing
+        airwing:NewPayload(GROUP:FindByName("Red_AWACS"), 2, {AUFTRAG.Type.ORBIT,AUFTRAG.Type.AWACS}, 100)
+        airwing:AddSquadron(RedAWACSSquadron)
+    end
+
     if parkingData.aircraftParkingCount > 10 then
-    local SQN1 = SQUADRON:New("Mig-21", 4, GenerateUniqueSquadronName("Red Fighter Squadron"))
-    SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.SEAD, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED})
+
+    local SQN1 = SQUADRON:New(Red_Fighter, 4, "Red Fighter Squadron "..airfieldName)
+    SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED})
     SQN1:SetDespawnAfterHolding()
     SQN1:SetDespawnAfterLanding()
     SQN1:SetTakeoffHot()
-    local SQN2 = SQUADRON:New("SU-25", 2, GenerateUniqueSquadronName("Red Attack Squadron"))
-    SQN2:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
+
+     
+    local SQN2 = SQUADRON:New(Red_Attack, 2, "Red Attack Squadron "..airfieldName)
+    SQN2:AddMissionCapability({AUFTRAG.Type.ESCORT, AUFTRAG.Type.SEAD, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
     SQN2:SetDespawnAfterHolding()
     SQN2:SetDespawnAfterLanding()
     SQN2:SetTakeoffHot()
+    
 
-    local SQN3 = SQUADRON:New("Mig-19", 2, GenerateUniqueSquadronName("Red Light Fighter Squadron"))
+    local SQN3 = SQUADRON:New(Red_LT_Fighter, 2, "Red Light Fighter Squadron "..airfieldName)
     SQN3:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING})
     SQN3:SetDespawnAfterHolding()
     SQN3:SetDespawnAfterLanding()
     SQN3:SetTakeoffHot()
 
-    airwing:NewPayload(GROUP:FindByName("Mig-19_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT})
-    airwing:NewPayload(GROUP:FindByName("Mig-21_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 80)
-    airwing:NewPayload(GROUP:FindByName("Mig-21_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED},50 )
-    airwing:NewPayload(GROUP:FindByName("SU-25_SEAD"), 2, {AUFTRAG.Type.SEAD})
-    airwing:NewPayload(GROUP:FindByName("SU-25_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
+    
+    Red_payload_Fighter_AA = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 80)
+    Red_payload_Fighter_CAS = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED},50 )
+    Red_payload_LtFighter_AA = airwing:NewPayload(GROUP:FindByName(Red_LT_Fighter.."_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT})
+    Red_payload_Fighter_SEAD = airwing:NewPayload(GROUP:FindByName(Red_Attack.."_SEAD"), 2, {AUFTRAG.Type.SEAD})
+    Red_payload_Attack_CAS = airwing:NewPayload(GROUP:FindByName(Red_Attack.."_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
     airwing:AddSquadron(SQN1)
     airwing:AddSquadron(SQN2)
     airwing:AddSquadron(SQN3)
+    env.info(string.format("###Squadron %s was added to  %s assets###", SQN1:GetName(), airwingName))
+    env.info(string.format("###Squadron %s was added to  %s assets###", SQN2:GetName(), airwingName))
+    env.info(string.format("###Squadron %s was added to  %s assets###", SQN3:GetName(), airwingName))
    
     
     else
     env.info("Not enough aircraft parking spots at " .. airfieldName)
     end
     if parkingData.heliParkingCount > 1 or parkingData.aircraftParkingCount > 1 then
-    local SQN4 = SQUADRON:New("MI-8", 8, GenerateUniqueSquadronName("Red Rotary Squadron"))
+    local SQN4 = SQUADRON:New(Red_Helo, 8, "Red Transport Squadron "..airfieldName)
     SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
     SQN4:SetDespawnAfterHolding()
     SQN4:SetDespawnAfterLanding()
     SQN4:SetTakeoffHot()
     airwing:AddSquadron(SQN4)
-    airwing:NewPayload(GROUP:FindByName("MI-8_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
-    airwing:NewPayload(GROUP:FindByName("MI-8_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
+    env.info(string.format("###Squadron %s was added to  %s assets###", SQN4:GetName(), airwingName))
+    local payload_helo_trans = airwing:NewPayload(GROUP:FindByName(Red_Helo.."_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
+    local payload_helo_CAS = airwing:NewPayload(GROUP:FindByName(Red_Helo.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
     else
     env.info("Not enough helicopter parking spots at " .. airfieldName)
     end
-    RedChief:AddAirwing(airwing)
     
+    RedAirwings[warehouseName] = airwing -- Store the airwing in the table
+    RedChief:AddAirwing(airwing)
+
     -- Create a Brigade
     local Brigade=BRIGADE:New(warehouseName, airwingname) --Ops.Brigade#BRIGADE
     -- Set spawn zone.
     Brigade:SetSpawnZone(airbase:GetZone())
         -- TPz Fuchs platoon.
-        local platoonAPC=PLATOON:New(Group_Red_APC, 5, GenerateUniqueSquadronName("Red Motorised"))
+        local platoonAPC=PLATOON:New(Group_Red_APC, 5, "Red Motorised Platoon "..airfieldName)
         platoonAPC:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD}, 60):SetAttribute(GROUP.Attribute.GROUND_APC)
             -- Mechanised platoon
-        local platoonMECH=PLATOON:New(Group_Red_Mech, 5, GenerateUniqueSquadronName("Red Mechanised"))
+        local platoonMECH=PLATOON:New(Group_Red_Mech, 5, "Red Mechanised Platoon "..airfieldName)
         platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD}, 70)
         platoonMECH:AddWeaponRange(UTILS.KiloMetersToNM(0.5), UTILS.KiloMetersToNM(20))
             -- Armoured platoon
-        local platoonArmoured =PLATOON:New(Group_Red_Armoured, 5, GenerateUniqueSquadronName("Red Armoured"))
+        local platoonArmoured =PLATOON:New(Group_Red_Armoured, 5,"Red Armoured Platoon "..airfieldName)
         platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
             -- Arty platoon.
-        local platoonARTY=PLATOON:New(Group_Red_Arty, 2, GenerateUniqueSquadronName("Red Artilliary"))
+        local platoonARTY=PLATOON:New(Group_Red_Arty, 2, "Red Artillary Platoon "..airfieldName)
         platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
         platoonARTY:AddWeaponRange(UTILS.KiloMetersToNM(10), UTILS.KiloMetersToNM(32)):SetAttribute(GROUP.Attribute.GROUND_ARTILLERY)
             -- M939 Truck platoon. Can provide ammo in DCS.
-        local platoonLogi=PLATOON:New(Group_Red_Truck, 5, GenerateUniqueSquadronName("Red Logistics"))
+        local platoonLogi=PLATOON:New(Group_Red_Truck, 5, "Red Logistics Platoon "..airfieldName)
         platoonLogi:AddMissionCapability({AUFTRAG.Type.AMMOSUPPLY}, 70)
-        local platoonINF=PLATOON:New(Group_Red_Inf, 5, GenerateUniqueSquadronName("Red Platoon"))
-        platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
+       --local platoonINF=PLATOON:New(Group_Red_Inf, 5, "Red Infantry Platoon "..airfieldName)
+       --platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
             -- mobile SAM
-        local platoonSAM=PLATOON:New(Group_Red_SAM, 5, GenerateUniqueSquadronName("Red SAM"))
-        platoonINF:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
-    
-    
-       --Group_Blue_SAM_Site = "Hawk_Site"
-       --Group_Blue_SAM = "Blue_SAM_M48_Template"
-       --Group_Blue_Mech = "Blue_Mech_Marder_Template"
-       --Group_Blue_APC = "Blue_APC_M113_Template"
-       --Group_Blue_Armoured = "Blue_Armoured_Leopard_Template"
-       --Group_Blue_Arty = "Blue_ART_M109_Template"
-       --Group_Blue_Inf = "Blue_INF_M4_Template"
-       --Group_Blue_Truck = "Blue_Truck_M939_Template"
-        
+        local platoonSAM=PLATOON:New(Group_Red_SAM, 5,  "Red SAM Platoon "..airfieldName)
+        platoonSAM:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
+           
         -- Add platoons.
         Brigade:AddPlatoon(platoonAPC)
         Brigade:AddPlatoon(platoonARTY)
         Brigade:AddPlatoon(platoonArmoured)
         Brigade:AddPlatoon(platoonMECH)
         Brigade:AddPlatoon(platoonLogi)
-        Brigade:AddPlatoon(platoonINF)
+        --Brigade:AddPlatoon(platoonINF)
         Brigade:AddPlatoon(platoonSAM)
     
     -- Start brigade.
     Brigade:Start()
     RedChief:AddBrigade(Brigade)
+    RedBrigades[warehouseName] = Brigade 
     local ongaurdzone = airbase:GetZone()
    -- local onguardCoord = ongaurdzone:GetRandomCoordinate(nil, nil, {land.SurfaceType.LAND})
     local GaurdZone1 =AUFTRAG:NewONGUARD(ongaurdzone:GetRandomCoordinate(nil, nil, {land.SurfaceType.LAND}))
@@ -872,7 +987,7 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
   --Brigade:AddMission(GaurdZone1)
   --Brigade:AddMission(GaurdZone2)
   --Brigade:AddMission(GaurdZone3)
-
+  
 end
 
 ------------------------------------------------------------------------------------------------------------
@@ -903,7 +1018,7 @@ function CreateBlueChief()
 
     -- Define Blue Chief
     BlueChief = CHIEF:New(coalition.side.BLUE, BlueAgents)
-    BlueChief:SetTacticalOverviewOn()
+    --BlueChief:SetTacticalOverviewOn()
     BlueChief:SetVerbosity(5)
 
     -- Set strategy for Blue Chief
@@ -985,7 +1100,7 @@ function CreateRedChief()
 
     -- Define Red Chief
       RedChief = CHIEF:New(coalition.side.RED, RedAgents)
-      RedChief:SetTacticalOverviewOn()
+     -- RedChief:SetTacticalOverviewOn()
       RedChief:SetVerbosity(5)
 
     -- Set strategy for Red Chief
@@ -1239,12 +1354,20 @@ function monitoropszones()
                 SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
                 warehouse = STATIC:FindByName(warehouseName)
                 CreateBlueAirwing(warehouse, airwingName, airfieldName)
+                
+                 Blue_ctld:AddCTLDZone(airfieldName,CTLD.CargoZoneType.LOAD,SMOKECOLOR.Blue,true,true)
+                 env.info("Blue ZONE added to CTLD LOAD ZONE: " .. airfieldName)
+                
             elseif coalitionSide == "red" then
                 coalitionSide = "RUSSIA"
                 SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
                 SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
                 warehouse = STATIC:FindByName(warehouseName)
                 CreateRedAirwing(warehouse, airwingName, airfieldName)
+
+                 Red_ctld:AddCTLDZone(airfieldName,CTLD.CargoZoneType.LOAD,SMOKECOLOR.Red,true,true)
+                 env.info("Red ZONE added to CTLD LOAD ZONE: " .. airfieldName)
+
             end
         end
     end)
@@ -1289,10 +1412,10 @@ function PlayerTaskingBlue()
    --local hereSRSPath = "C:\\Program Files\\DCS-SimpleRadio-Standalone"
    --local hereSRSPort = 5002
     -- local hereSRSGoogle = "C:\\Program Files\\DCS-SimpleRadio-Standalone\\yourkey.json"
-    BlueTaskManagerA2G:SetSRS({130,255},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+    BlueTaskManagerA2G:SetSRS({130,250},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
    
     -- Controller will announce itself under these broadcast frequencies, handy to use cold-start frequencies here of your aircraft
-    BlueTaskManagerA2G:SetSRSBroadcast({130,255},{radio.modulation.AM,radio.modulation.AM})
+    BlueTaskManagerA2G:SetSRSBroadcast({130,250},{radio.modulation.AM,radio.modulation.AM})
    
     -- Example: Manually add an AIRBASE as a target
     --BlueTaskManagerA2G:AddTarget(AIRBASE:FindByName(AIRBASE.Caucasus.Senaki_Kolkhi))
@@ -1305,7 +1428,7 @@ function PlayerTaskingBlue()
    
     -- Set target radius
     BlueTaskManagerA2G:SetTargetRadius(1000)
-    BlueTaskManagerA2G:Verbose()
+   -- BlueTaskManagerA2G:Verbose()  ---doesnt work
 end
    
 function PlayerTaskingRed()
@@ -1345,10 +1468,10 @@ function PlayerTaskingRed()
    --local hereSRSPath = "C:\\Program Files\\DCS-SimpleRadio-Standalone"
    --local hereSRSPort = 5002
     -- local hereSRSGoogle = "C:\\Program Files\\DCS-SimpleRadio-Standalone\\yourkey.json"
-    RedTaskManagerA2G:SetSRS({130,225},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+    RedTaskManagerA2G:SetSRS({130,240},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
    
     -- Controller will announce itself under these broadcast frequencies, handy to use cold-start frequencies here of your aircraft
-    RedTaskManagerA2G:SetSRSBroadcast({127,225},{radio.modulation.AM,radio.modulation.AM})
+    RedTaskManagerA2G:SetSRSBroadcast({127,240},{radio.modulation.AM,radio.modulation.AM})
    
     -- Example: Manually add an AIRBASE as a target
     --RedTaskManagerA2G:AddTarget(AIRBASE:FindByName(AIRBASE.Caucasus.Senaki_Kolkhi))
@@ -1357,11 +1480,11 @@ function PlayerTaskingRed()
     --RedTaskManagerA2G:AddTarget(GROUP:FindByName("Scout Coordinate"):GetCoordinate())
    
     -- Set a whitelist for tasks
-    RedTaskManagerA2G:SetTaskWhiteList({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING, AUFTRAG.Type.BOMBRUNWAY, AUFTRAG.Type.SEAD,AUFTRAG.Type.INTERCEPT,AUFTRAG.Type.CAP})
+    RedTaskManagerA2G:SetTaskWhiteList({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING, AUFTRAG.Type.BOMBRUNWAY, AUFTRAG.Type.SEAD,AUFTRAG.Type.INTERCEPT,AUFTRAG.Type.CAP,AUFTRAG.NewTROOPTRANSPORT})
    
     -- Set target radius
     RedTaskManagerA2G:SetTargetRadius(1000)
-    RedTaskManagerA2G:Verbose()
+   -- RedTaskManagerA2G:Verbose()---doesnt work
 end
 ------------------------------------------
 ------------------------------------------
@@ -1458,23 +1581,581 @@ function BlueOpsCTLD()
           --moved  to zone empty function 
           --Blue_ctld:AddCTLDZone("Dropzone",CTLD.CargoZoneType.DROP,SMOKECOLOR.Red,true,true)
     
-    function OPSTRANSPORT:OnAfterCruise(From, Event, To, OpsGroupCarrier)
-       OpsGroupCarrier:Cruise(25)
-     
-    end
     
     env.info(string.format("###Blue CTLD FILE Loaded Succesfully###"))
     
 end
 
+function RedOpsCTLD()
+    env.info(string.format("###Red CTLD FILE Start Load ###"))
+    
+    SETTINGS:SetPlayerMenuOff()
+    
+       Red_ctld = CTLD:New(coalition.side.RED,nil,"23rd Transport Squadron")
+    
+       Red_ctld:SetOwnSetPilotGroups(SET_GROUP:New():FilterCoalitions("red"):FilterCategoryHelicopter():FilterFunction(
+        function(grp)
+        local _type = grp:GetTypeName()
+        local retval = false
+        if _type == "CH-47Fbl1" or _type == "UH-1H" or _type == "Mi-8MT" or _type == "Mi-8MTV2" or _type == "Mi-24P" or _type == "UH-60L"   then
+            retval = true;
+        end
+        return retval
+        end ):FilterStart())
+       
+       Red_ctld.maximumHoverHeight = 35
+       Red_ctld.forcehoverload = false
+       Red_ctld.dropcratesanywhere = true
+       Red_ctld.buildtime = 10
+       Red_ctld:UnitCapabilities("UH-1H", true, true, 2, 12, 15, 3000)
+       Red_ctld:UnitCapabilities("MI-24P", true, true, 2, 12, 15, 3000)
+       Red_ctld:UnitCapabilities("MI-24V", true, true, 2, 12, 15, 3000)
+       Red_ctld:UnitCapabilities("CH-47", true, true, 8, 24, 30, 7200)
+    
+       Red_ctld:__Start(5)
+    
+       -- add infantry unit called "Anti-Tank Small" using template "ATS", of type TROOP with size 3
+       -- infantry units will be loaded directly from LOAD zones into the heli (matching number of free seats needed)
+          Red_ctld:AddTroopsCargo("Infantry Squad",{Group_Red_Inf},CTLD_CARGO.Enum.TROOPS,3)
+    
+       -- add infantry unit called "Anti-Tank" using templates "AA" and "AA"", of type TROOP with size 4. No weight. We only have 2 in stock:
+          Red_ctld:AddTroopsCargo("Anti-Air",{Group_Red_SAM},CTLD_CARGO.Enum.TROOPS,3,nil)
+          
+          Red_ctld:AddTroopsCargo("M113",{Group_Red_APC},CTLD_CARGO.Enum.TROOPS,4,nil)
+          Red_ctld:AddTroopsCargo("SHORAD",{Group_Red_SAM},CTLD_CARGO.Enum.TROOPS,4,nil)
+    --      Red_ctld:AddTroopsCargo("Mechanised",{"Red_Mech_Marder_Template","Ground_Red_SPG_Stryker"},CTLD_CARGO.Enum.TROOPS,8,nil)
+    
+    
+          -- add an engineers unit called "Wrenches" using template "Engineers", of type ENGINEERS with size 2. Engineers can be loaded, dropped,
+       -- and extracted like troops. However, the will seek to build and/or repair crates found in a given radius. Handy if you can\'t stay
+       -- to build or repair or under fire.
+          Red_ctld:AddTroopsCargo("Wrenches",{"Red_CTLD_Wrenches"},CTLD_CARGO.Enum.ENGINEERS,4)
+          Red_ctld.EngineerSearch = 2000 -- teams will search for crates in this radius.
+    
+          -- add vehicle called "Humvee" using template "Humvee", of type VEHICLE, size 2, i.e. needs two crates to be build
+       -- vehicles and FOB will be spawned as crates in a LOAD zone first. Once transported to DROP zones, they can be build into the objects
+          Red_ctld:AddCratesCargo("Marder Group",{Group_Red_Mech},CTLD_CARGO.Enum.VEHICLE,2,500)
+       -- if you want to add weight to your Heli, crates can have a weight in kg **per crate**. Fly carefully.
+          Red_ctld:AddCratesCargo("Hawk_Site", {Group_Red_SAM_Site},CTLD_CARGO.Enum.VEHICLE,8,500)
+       -- if you want to add weight to your Heli, crates can have a weight in kg **per crate**. Fly carefully.
+          --Red_ctld:AddCratesCargo("NASAM",{"Red_NASAM_Template"},CTLD_CARGO.Enum.VEHICLE,18)
+       -- if you want to add weight to your Heli, crates can have a weight in kg **per crate**. Fly carefully.
+          Red_ctld:AddCratesCargo("Leopard Group",{Group_Red_Armoured},CTLD_CARGO.Enum.VEHICLE,4,500)
+          Red_ctld:AddCratesCargo("M109 Group",{Group_Red_Arty},CTLD_CARGO.Enum.VEHICLE,2,500)
+       -- if you want to add weight to your Heli, crates can have a weight in kg **per crate**. Fly carefully.
+       -- add infantry unit called "Forward Ops Base" using template "FOB", of type FOB, size 4, i.e. needs four crates to be build:
+          Red_ctld:AddCratesCargo("Forward Ops Base",{"Red_CTLD_FOB"},CTLD_CARGO.Enum.FOB,4)
+    
+       -- add crates to repair FOB or VEHICLE type units - the 2nd parameter needs to match the template you want to repair,
+       -- e.g. the "Humvee" here refers back to the "Humvee" crates cargo added above (same template!)
+          Red_ctld:AddCratesRepair("Humvee Repair","Red_Unarmed_Humvee_Template",CTLD_CARGO.Enum.REPAIR,1)
+          Red_ctld.repairtime = 300 -- takes 300 seconds to repair something
+    
+       -- add static cargo objects, e.g ammo chests - the name needs to refer to a STATIC object in the mission editor, 
+       -- here: it\'s the UNIT name (not the GROUP name!), the second parameter is the weight in kg.
+          --Red_ctld:AddStaticsCargo("Red_Ammo",500)
+    
+          redAirfieldszoneset:ForEachZone(
+            function(zone)
+                local zonename = zone:GetName()
+                Red_ctld:AddCTLDZone(zonename,CTLD.CargoZoneType.LOAD,SMOKECOLOR.Red,true,true)
+              
+                env.info("Red ZONE added to CTLD LOAD ZONE: " .. zone:GetName())
+            end
+        )  
+    
+          -- Add a zone of type LOAD to our setup. Players can load any troops and crates here as defined in 1.2 above.
+          -- "Loadzone" is the name of the zone from the ME. Players can load, if they are inside the zone.
+          -- Smoke and Flare color for this zone is Red, it is active (can be used) and has a radio beacon.
+           -- Add a zone of type DROP. Players can drop crates here.
+          -- Smoke and Flare color for this zone is Red, it is active (can be used) and has a radio beacon.
+          -- NOTE: Troops can be unloaded anywhere, also when hovering in parameters. 
+          --moved  to zone empty function 
+          --Red_ctld:AddCTLDZone("Dropzone",CTLD.CargoZoneType.DROP,SMOKECOLOR.Red,true,true)
+
+    env.info(string.format("###Red CTLD FILE Loaded Succesfully###"))
+    
+end
+
 BlueOpsCTLD()
+RedOpsCTLD()
+
+-------------------------------------------
+-------------------------------------------
+---------End CTLD------------------------
+-------------------------------------------
+-------------------------------------------
+
+--------------------------------------------
+--------------------------------------------
+------------------Airwing Production--------
+--------------------------------------------
+
+local function ProduceAirwing(warehouseName, airwing, Coalition)
+    local factory = STATIC:FindByName(warehouseName)
+
+   
+    -- Check that factory is alive.
+    if factory and factory:IsAlive() then
+        env.info(string.format("Producing for airwing: %s for %s", warehouseName, Coalition))
+        
+        -- Function to safely check payload and add if it's 2 or less
+        local function IncreaseIfBelowLimit(payload)
+            if payload then
+                local currentAmount = airwing:GetPayloadAmount(payload) or 0
+                if currentAmount <= 2 then
+                    airwing:IncreasePayloadAmount(payload, 1)
+                    env.info(string.format("Increased payload for %s, new amount: %d", warehouseName, currentAmount + 1))
+                else
+                    env.info(string.format("Skipped increasing payload for %s (already >2)", warehouseName))
+                end
+            else
+                env.info(string.format("Warning: payload does not exist for %s", warehouseName))
+            end
+        end
+
+
+        if Coalition == "Blue" then
+            IncreaseIfBelowLimit(Blue_payload_Fighter_AA)
+            IncreaseIfBelowLimit(Blue_payload_Fighter_SEAD)
+            IncreaseIfBelowLimit(Blue_payload_Fighter_CAS)
+            IncreaseIfBelowLimit(Blue_payload_LtFighter_AA)
+            IncreaseIfBelowLimit(Blue_payload_LtFighter_CAS)
+            IncreaseIfBelowLimit(Blue_payload_Attack_CAS)
+        elseif Coalition == "Red" then
+            IncreaseIfBelowLimit(Red_payload_Fighter_AA)
+            IncreaseIfBelowLimit(Red_payload_Fighter_SEAD)
+            IncreaseIfBelowLimit(Red_payload_Fighter_CAS)
+            IncreaseIfBelowLimit(Red_payload_LtFighter_AA)
+            IncreaseIfBelowLimit(Red_payload_LtFighter_CAS)
+            IncreaseIfBelowLimit(Red_payload_Attack_CAS)
+        else
+            env.info("Coalition not found")
+        end
+
+        -- Function to safely get payload amount
+        local function GetPayloadSafe(payload)
+            return payload and airwing:GetPayloadAmount(payload) or 0
+        end
+
+        local N1, N2, N3, N4, N5, N6
+        if Coalition == "Blue" then
+            N1 = GetPayloadSafe(Blue_payload_Fighter_AA)
+            N2 = GetPayloadSafe(Blue_payload_Fighter_SEAD)
+            N3 = GetPayloadSafe(Blue_payload_Fighter_CAS)
+            N4 = GetPayloadSafe(Blue_payload_LtFighter_AA)
+            N5 = GetPayloadSafe(Blue_payload_LtFighter_CAS)
+            N6 = GetPayloadSafe(Blue_payload_Attack_CAS)
+        elseif Coalition == "Red" then
+            N1 = GetPayloadSafe(Red_payload_Fighter_AA)
+            N2 = GetPayloadSafe(Red_payload_Fighter_SEAD)
+            N3 = GetPayloadSafe(Red_payload_Fighter_CAS)
+            N4 = GetPayloadSafe(Red_payload_LtFighter_AA)
+            N5 = GetPayloadSafe(Red_payload_LtFighter_CAS)
+            N6 = GetPayloadSafe(Red_payload_Attack_CAS)
+        else
+            env.info("Coalition not found")
+        end
+
+        -- Log payload info
+        env.info(string.format(
+            "Payloads available after production at %s: AA=%d, SEAD=%d, CAS=%d, LtAA=%d, LtCAS=%d, AttackCAS=%d",
+            warehouseName, N1 or 0, N2 or 0, N3 or 0, N4 or 0, N5 or 0, N6 or 0
+        ))
+        if Coalition == "Blue" then 
+        local airfieldName = warehouseName:gsub("^warehouse_", "")
+        local Sqn1 = airwing:GetSquadron("Blue Fighter Squadron "..airfieldName)
+        local Sqn2 = airwing:GetSquadron("Blue Light Fighter Squadron "..airfieldName)
+        local Sqn3 = airwing:GetSquadron("Blue Attack Squadron "..airfieldName)
+        local Sqn4 = airwing:GetSquadron("Blue Transport Squadron "..airfieldName)
+        env.info("Producing assets for Blue Airwing: " .. airfieldName)
+            if Sqn1  then
+                    local Nsqn1 = Sqn1:CountAssets()
+                    if Nsqn1 < 2 then
+                    env.info(string.format("###Squadron %s has %d assets###", Sqn1:GetName(), Nsqn1)) 
+                    airwing:AddAssetToSquadron(Sqn1, 2)
+                    env.info(string.format("Added 2 assets to squadron %s. New total: %d", Sqn1:GetName(), Sqn1:CountAssets()))
+                else
+                    env.info(string.format("No assets Added to squadron %s.  Total Assets: %d", Sqn1:GetName(), Sqn1:CountAssets()))
+                    end
+            end
+            if Sqn2  then
+                    local Nsqn2 = Sqn2:CountAssets()
+                    if Nsqn2 < 2 then
+                    env.info(string.format("###Squadron %s has %d assets###", Sqn2:GetName(), Nsqn2)) 
+                    airwing:AddAssetToSquadron(Sqn2, 2)
+                    env.info(string.format("Added 2 assets to squadron %s. New total: %d", Sqn2:GetName(), Sqn2:CountAssets()))
+                    else
+                        env.info(string.format("No assets Added to squadron %s.  Total Assets: %d", Sqn2:GetName(), Sqn2:CountAssets()))
+                    end
+            end
+            if Sqn3  then
+                    local Nsqn3 = Sqn3:CountAssets()
+                    if Nsqn3 < 2 then
+                    env.info(string.format("###Squadron %s has %d assets###", Sqn3:GetName(), Nsqn3)) 
+                    airwing:AddAssetToSquadron(Sqn3, 2)
+                    env.info(string.format("Added 2 assets to squadron %s. New total: %d", Sqn3:GetName(), Sqn3:CountAssets()))
+                    else
+                        env.info(string.format("No assets Added to squadron %s.  Total Assets: %d", Sqn3:GetName(), Sqn3:CountAssets()))
+                    end
+            end
+            if Sqn4  then
+                    local Nsqn4 = Sqn4:CountAssets()
+                    if Nsqn4 < 2 then
+                    env.info(string.format("###Squadron %s has %d assets###", Sqn4:GetName(), Nsqn4)) 
+                    airwing:AddAssetToSquadron(Sqn4, 2)
+                    env.info(string.format("Added 2 assets to squadron %s. New total: %d", Sqn4:GetName(), Sqn4:CountAssets()))
+                    else
+                        env.info(string.format("No assets Added to squadron %s.  Total Assets: %d", Sqn4:GetName(), Sqn4:CountAssets()))
+                    end
+            end
+
+
+        end
+        if Coalition == "Red" then
+        local airfieldName = warehouseName:gsub("^warehouse_", "")
+        local Sqn1 = airwing:GetSquadron("Red Fighter Squadron "..airfieldName)
+        local Sqn2 = airwing:GetSquadron("Red Light Fighter Squadron "..airfieldName)
+        local Sqn3 = airwing:GetSquadron("Red Attack Squadron "..airfieldName)
+        local Sqn4 = airwing:GetSquadron("Red Transport Squadron "..airfieldName)
+        env.info("Producing assets for Red Airwing: " .. airfieldName)
+            if Sqn1  then
+                    local Nsqn1 = Sqn1:CountAssets()
+                    if Nsqn1 < 2 then
+                    env.info(string.format("###Squadron %s has %d assets###", Sqn1:GetName(), Nsqn1)) 
+                    airwing:AddAssetToSquadron(Sqn1, 2)
+                    env.info(string.format("Added 2 assets to squadron %s. New total: %d", Sqn1:GetName(), Sqn1:CountAssets()))
+                else
+                    env.info(string.format("No assets Added to squadron %s.  Total Assets: %d", Sqn1:GetName(), Sqn1:CountAssets()))
+                    end
+            end
+            if Sqn2  then
+                    local Nsqn2 = Sqn2:CountAssets()
+                    if Nsqn2 < 2 then
+                    env.info(string.format("###Squadron %s has %d assets###", Sqn2:GetName(), Nsqn2)) 
+                    airwing:AddAssetToSquadron(Sqn2, 2)
+                    env.info(string.format("Added 2 assets to squadron %s. New total: %d", Sqn2:GetName(), Sqn2:CountAssets()))
+                    else
+                        env.info(string.format("No assets Added to squadron %s.  Total Assets: %d", Sqn2:GetName(), Sqn2:CountAssets()))
+                    end
+            end
+            if Sqn3  then
+                    local Nsqn3 = Sqn3:CountAssets()
+                    if Nsqn3 < 2 then
+                    env.info(string.format("###Squadron %s has %d assets###", Sqn3:GetName(), Nsqn3)) 
+                    airwing:AddAssetToSquadron(Sqn3, 2)
+                    env.info(string.format("Added 2 assets to squadron %s. New total: %d", Sqn3:GetName(), Sqn3:CountAssets()))
+                    else
+                        env.info(string.format("No assets Added to squadron %s.  Total Assets: %d", Sqn3:GetName(), Sqn3:CountAssets()))
+                    end
+            end
+            if Sqn4  then
+                    local Nsqn4 = Sqn4:CountAssets()
+                    if Nsqn4 < 2 then
+                    env.info(string.format("###Squadron %s has %d assets###", Sqn4:GetName(), Nsqn4)) 
+                    airwing:AddAssetToSquadron(Sqn4, 2)
+                    env.info(string.format("Added 2 assets to squadron %s. New total: %d", Sqn4:GetName(), Sqn4:CountAssets()))
+                    else
+                        env.info(string.format("No assets Added to squadron %s.  Total Assets: %d", Sqn4:GetName(), Sqn4:CountAssets()))
+                    end
+            end
+        end    
+    
+    end
+end
+
+
+--------------------------------------------------
+-- Function to produce brigade assets for a given warehouse and brigade
+-- Coalition is either "Blue" or "Red"
+--------------------------------------------------
+
+function Producebrigade(warehouseName, brigade, Coalition)
+    if Coalition == "Blue" then 
+        local airfieldName = warehouseName:gsub("^warehouse_", "")
+        local Plt1 = brigade:GetPlatoon("Blue Motorised Platoon "..airfieldName)
+        local Plt2 = brigade:GetPlatoon("Blue Mechanised Platoon "..airfieldName)
+        local Plt3 = brigade:GetPlatoon("Blue Armoured Platoon "..airfieldName)
+        local Plt4 = brigade:GetPlatoon("Blue Artillary Platoon "..airfieldName)
+        local Plt5 = brigade:GetPlatoon("Blue Logistics Platoon "..airfieldName)
+        local Plt6 = brigade:GetPlatoon("Blue Infantry Platoon "..airfieldName)
+        local Plt7 = brigade:GetPlatoon("Blue SAM Platoon "..airfieldName)
+        env.info("Producing assets for Blue Brigade: " .. airfieldName)
+        if Plt1  then
+            local Nplt1 = Plt1:CountAssets()
+            if Nplt1 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt1:GetName(), Nplt1)) 
+            brigade:AddAssetToSquadron(Plt1, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt1:GetName(), Plt1:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt1:GetName(), Plt1:CountAssets()))
+            end
+        end
+        if Plt2  then
+            local Nplt2 = Plt2:CountAssets()
+            if Nplt2 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt2:GetName(), Nplt2)) 
+            brigade:AddAssetToSquadron(Plt2, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt2:GetName(), Plt2:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt2:GetName(), Plt2:CountAssets()))
+            end
+        end
+        if Plt3  then
+            local Nplt3 = Plt3:CountAssets()
+            if Nplt3 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt3:GetName(), Nplt3)) 
+            brigade:AddAssetToSquadron(Plt3, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt3:GetName(), Plt3:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt3:GetName(), Plt3:CountAssets()))
+            end
+        end 
+        if Plt4  then
+            local Nplt4 = Plt4:CountAssets()
+            if Nplt4 < 2 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt4:GetName(), Nplt4)) 
+            brigade:AddAssetToSquadron(Plt4, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt4:GetName(), Plt4:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt4:GetName(), Plt4:CountAssets()))
+            end
+        end
+        if Plt5  then
+            local Nplt5 = Plt5:CountAssets()
+            if Nplt5 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt5:GetName(), Nplt5)) 
+            brigade:AddAssetToSquadron(Plt5, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt5:GetName(), Plt5:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt5:GetName(), Plt5:CountAssets()))
+            end
+        end
+        if Plt6  then
+            local Nplt6 = Plt6:CountAssets()
+            if Nplt6 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt6:GetName(), Nplt6)) 
+            brigade:AddAssetToSquadron(Plt6, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt6:GetName(), Plt6:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt6:GetName(), Plt6:CountAssets()))
+            end
+        end
+        if Plt7  then
+            local Nplt7 = Plt7:CountAssets()
+            if Nplt7 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt7:GetName(), Nplt7)) 
+            brigade:AddAssetToSquadron(Plt7, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt7:GetName(), Plt7:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt7:GetName(), Plt7:CountAssets()))
+            end
+        end
+    end
+
+    if Coalition == "Red" then 
+        local airfieldName = warehouseName:gsub("^warehouse_", "")
+        local Plt1 = brigade:GetPlatoon("Red Motorised Platoon "..airfieldName)
+        local Plt2 = brigade:GetPlatoon("Red Mechanised Platoon "..airfieldName)
+        local Plt3 = brigade:GetPlatoon("Red Armoured Platoon "..airfieldName)
+        local Plt4 = brigade:GetPlatoon("Red Artillary Platoon "..airfieldName)
+        local Plt5 = brigade:GetPlatoon("Red Logistics Platoon "..airfieldName)
+        local Plt6 = brigade:GetPlatoon("Red Infantry Platoon "..airfieldName)
+        local Plt7 = brigade:GetPlatoon("Red SAM Platoon "..airfieldName)
+        env.info("Producing assets for Red Brigade: " .. airfieldName)
+        --motorised platoon
+        if Plt1  then
+            local Nplt1 = Plt1:CountAssets()
+            if Nplt1 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt1:GetName(), Nplt1)) 
+            brigade:AddAssetToSquadron(Plt1, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt1:GetName(), Plt1:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt1:GetName(), Plt1:CountAssets()))
+            end
+        end
+        --mechanised platoon
+        if Plt2  then
+            local Nplt2 = Plt2:CountAssets()
+            if Nplt2 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt2:GetName(), Nplt2)) 
+            brigade:AddAssetToSquadron(Plt2, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt2:GetName(), Plt2:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt2:GetName(), Plt2:CountAssets()))
+            end
+        end
+        --armoured platoon
+        if Plt3  then
+            local Nplt3 = Plt3:CountAssets()
+            if Nplt3 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt3:GetName(), Nplt3))
+            brigade:AddAssetToSquadron(Plt3, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt3:GetName(), Plt3:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt3:GetName(), Plt3:CountAssets()))
+            end
+        end
+        --artillary platoon
+        if Plt4  then
+            local Nplt4 = Plt4:CountAssets()
+            if Nplt4 < 2 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt4:GetName(), Nplt4)) 
+            brigade:AddAssetToSquadron(Plt4, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt4:GetName(), Plt4:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt4:GetName(), Plt4:CountAssets()))
+            end
+        end
+        --logistics platoon
+        if Plt5  then
+            local Nplt5 = Plt5:CountAssets()
+            if Nplt5 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt5:GetName(), Nplt5)) 
+            brigade:AddAssetToSquadron(Plt5, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt5:GetName(), Plt5:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt5:GetName(), Plt5:CountAssets()))
+            end
+        end
+        --infantry platoon
+        if Plt6  then
+            local Nplt6 = Plt6:CountAssets()
+            if Nplt6 < 3 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt6:GetName(), Nplt6)) 
+            brigade:AddAssetToSquadron(Plt6, 2)
+            env.info(string.format("Added 2 assets to Platoon %s. New total: %d", Plt6:GetName(), Plt6:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt6:GetName(), Plt6:CountAssets()))
+            end
+        end
+        --SAM platoon
+        if Plt7  then
+            local Nplt7 = Plt7:CountAssets()
+            if Nplt7 < 2 then
+            env.info(string.format("###Platoon %s has %d assets###", Plt7:GetName(), Nplt7)) 
+            brigade:AddAssetToSquadron(Plt7, 1)
+            env.info(string.format("Added 1 assets to Platoon %s. New total: %d", Plt7:GetName(), Plt7:CountAssets()))
+            else
+            env.info(string.format("No assets Added to Platoon %s.  Total Assets: %d", Plt7:GetName(), Plt7:CountAssets()))
+            end
+        end
+    end
+end
+
+
+
+
+  -- Start a timer to simulate payload production. -use in create airwing function
+TIMER:New(function()
+    for warehouseName, airwing in pairs(BlueAirwings) do
+        local factory = STATIC:FindByName("Blue_Airwing_Factory")
+        
+        -- Check that factory is alive.
+        if factory and factory:IsAlive() then
+            local Coalition = "Blue"
+            env.info("Producing for airwing: ###".. airwing:GetName() .."### for Blue")
+            ProduceAirwing(warehouseName, airwing, Coalition)
+        end
+    end
+    for warehouseName, brigade in pairs(BlueBrigades) do
+        local factory = STATIC:FindByName("Blue_Airwing_Factory")
+        
+        -- Check that factory is alive.
+        if factory and factory:IsAlive() then
+            local Coalition = "Blue"
+            env.info("Producing for Brigade: ###".. brigade:GetName() .."### for Blue")
+            Producebrigade(warehouseName, brigade, Coalition)
+        end
+    end
+    
+end):Start(20 * 60, 20 * 60)
+
+TIMER:New(function()
+    for warehouseName, airwing in pairs(RedAirwings) do
+        local factory = STATIC:FindByName("Red_Airwing_Factory")
+        
+        -- Check that factory is alive.
+        if factory and factory:IsAlive() then
+            local Coalition = "Red"
+            env.info("Producing for airwing: ###"..airwing:GetName().."### for Red")
+            ProduceAirwing(warehouseName, airwing, Coalition)
+                     
+        end
+    end
+    for warehouseName, brigade in pairs(RedBrigades) do
+        local factory = STATIC:FindByName("Red_Airwing_Factory")
+        
+        -- Check that factory is alive.
+        if factory and factory:IsAlive() then
+            local Coalition = "Red"
+            env.info("Producing for Brigade: ###".. brigade:GetName() .."### for Red")
+            Producebrigade(warehouseName, brigade, Coalition)
+        end
+    end
+end):Start(20 * 60, 20 * 60)
+
+
+
+
 -------------
 -----CTLD----
 -------------
------- Schedule functions properly
-timer.scheduleFunction(monitoropszones, {}, timer.getTime() + 12)
-timer.scheduleFunction(PlayerTaskingBlue, {}, timer.getTime() + 20)
-timer.scheduleFunction(PlayerTaskingRed, {}, timer.getTime() + 22)
+local function FindAirwingByAirfield(airfieldName)
+    for warehouseName, airwing in pairs(BlueAirwings) do
+        if string.find(warehouseName, airfieldName) then
+            env.info("Found airwing for airfield: " .. airfieldName)
+            return airwing
+        end
+    end
+    env.info("No airwing found for airfield: " .. airfieldName)
+    return nil
+end
+--------------------
+-------AI GCI--------
+--------------------
+-- Set up AWACS called "AWACS North". It will use the AwacsAW Airwing set up above and be of the "blue" coalition. Homebase is Kutaisi.
+-- The AWACS Orbit Zone is a round zone set in the mission editor named "Awacs Orbit", the FEZ is a Polygon-Zone called "Rock" we have also
+-- set up in the mission editor with a late activated helo named "Rock#ZONE_POLYGON". Note this also sets the BullsEye to be referenced as "Rock".
+-- The CAP station zone is called "Fremont". We will be on 255 AM.
+local Blueawacs = AWACS:New("Darkstar",BlueAwacsAirwing,"blue"    ,AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_E",ZONE:FindByName("Bulls"),"CAP_Zone_E",255,radio.modulation.AM )
+-- set one escort group; this example has two units in the template group, so they can fly a nice formation.
+Blueawacs:SetEscort(1,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+-- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
+Blueawacs:SetAwacsDetails(CALLSIGN.AWACS.Darkstar,1,30,300,88,25)
+-- Set up SRS on port 5010 - change the below to your path and port
+Blueawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","female","en-GB",5010)
+-- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
+--Blueawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
+-- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
+--Blueawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
+-- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
+Blueawacs:SetColdWar()
+-- And start
+Blueawacs:__Start(5)
+
+local Redawacs = AWACS:New("Magic",RedAwacsAirwing,"red",AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_W",ZONE:FindByName("Bulls"),"CAP_Zone_E",245,radio.modulation.AM )
+-- set one escort group; this example has two units in the template group, so they can fly a nice formation.
+Redawacs:SetEscort(1,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+-- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
+Redawacs:SetAwacsDetails(CALLSIGN.AWACS.Magic,1,30,300,88,25)
+-- Set up SRS on port 5010 - change the below to your path and port
+Redawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","female","en-GB",5010)
+-- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
+--Redawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
+-- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
+--Redawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
+-- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
+Redawacs:SetColdWar()
+-- And start
+Redawacs:__Start(5)
+---------------------
+---------------------
+--End AI GCI-----
+---------------------
+---------------------
+TIMER:New(PlayerTaskingBlue()):Start(20)
+TIMER:New(PlayerTaskingRed()):Start(20)
 
 ----------------------------------
 ----------------------------------
