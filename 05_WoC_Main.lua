@@ -597,7 +597,10 @@ local function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDi
           end
      timer.scheduleFunction(spawnmessageblue, {}, timer.getTime() + 1)
      
-        if  parkingCount > 80 then
+     local parkingData = airbaseParkingSummary(airfieldName)
+      
+    
+     if  parkingData.aircraftParkingCount > 80 then
         Spawn_Near_airbase(Group_Blue_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
     end
 
@@ -624,9 +627,9 @@ local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDis
         end
    timer.scheduleFunction(spawnmessageRed, {}, timer.getTime() + 1)
     
-    
+    local parkingData = airbaseParkingSummary(airfieldName)
 
-     if parkingCount > 100 then
+     if parkingData.aircraftParkingCount > 100 then
          Spawn_Near_airbase(Group_Red_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
      end
  
@@ -792,7 +795,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     platoonMECH:AddWeaponRange(UTILS.KiloMetersToNM(0.5), UTILS.KiloMetersToNM(20))
         -- Armoured platoon
     local platoonArmoured =PLATOON:New(Group_Blue_Armoured, 5,"Blue Armoured Platoon "..airfieldName)
-    platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
+    platoonArmoured:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
         -- Arty platoon.
     local platoonARTY=PLATOON:New(Group_Blue_Arty, 2, "Blue Artillary Platoon "..airfieldName)
     platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
@@ -800,11 +803,11 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         -- M939 Truck platoon. Can provide ammo in DCS.
     local platoonLogi=PLATOON:New(Group_Blue_Truck, 5, "Blue Logistics Platoon "..airfieldName)
     platoonLogi:AddMissionCapability({AUFTRAG.Type.AMMOSUPPLY}, 70)
-    local platoonINF=PLATOON:New(Group_Blue_Inf, 5, "Blue Infantry Platoon "..airfieldName)
-    platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
+    --local platoonINF=PLATOON:New(Group_Blue_Inf, 5, "Blue Infantry Platoon "..airfieldName)
+    --platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
         -- mobile SAM
     local platoonSAM=PLATOON:New(Group_Blue_SAM, 5, "Blue SAM Platoon "..airfieldName)
-    platoonINF:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
+    platoonSAM:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
    
     -- Add platoons.
     Brigade:AddPlatoon(platoonAPC)
@@ -812,7 +815,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     Brigade:AddPlatoon(platoonArmoured)
     Brigade:AddPlatoon(platoonMECH)
     Brigade:AddPlatoon(platoonLogi)
-    Brigade:AddPlatoon(platoonINF)
+    --Brigade:AddPlatoon(platoonINF)
     Brigade:AddPlatoon(platoonSAM)
 
     -- Start brigade.
@@ -954,11 +957,11 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
             -- M939 Truck platoon. Can provide ammo in DCS.
         local platoonLogi=PLATOON:New(Group_Red_Truck, 5, "Red Logistics Platoon "..airfieldName)
         platoonLogi:AddMissionCapability({AUFTRAG.Type.AMMOSUPPLY}, 70)
-        local platoonINF=PLATOON:New(Group_Red_Inf, 5, "Red Infantry Platoon "..airfieldName)
-        platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
+       --local platoonINF=PLATOON:New(Group_Red_Inf, 5, "Red Infantry Platoon "..airfieldName)
+       --platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
             -- mobile SAM
         local platoonSAM=PLATOON:New(Group_Red_SAM, 5,  "Red SAM Platoon "..airfieldName)
-        platoonINF:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
+        platoonSAM:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
            
         -- Add platoons.
         Brigade:AddPlatoon(platoonAPC)
@@ -966,7 +969,7 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
         Brigade:AddPlatoon(platoonArmoured)
         Brigade:AddPlatoon(platoonMECH)
         Brigade:AddPlatoon(platoonLogi)
-        Brigade:AddPlatoon(platoonINF)
+        --Brigade:AddPlatoon(platoonINF)
         Brigade:AddPlatoon(platoonSAM)
     
     -- Start brigade.
@@ -1029,7 +1032,7 @@ function CreateBlueChief()
     BlueChief:SetLimitMission(4, AUFTRAG.Type.GROUNDATTACK)
     BlueChief:SetLimitMission(4, AUFTRAG.Type.RECON)
     BlueChief:SetLimitMission(4, AUFTRAG.Type.BAI)
-    BlueChief:SetLimitMission(8, AUFTRAG.Type.INTERCEPT)
+    BlueChief:SetLimitMission(4, AUFTRAG.Type.INTERCEPT)
     BlueChief:SetLimitMission(4, AUFTRAG.Type.SEAD)
     BlueChief:SetLimitMission(4, AUFTRAG.Type.CAPTUREZONE)
     BlueChief:SetLimitMission(4, AUFTRAG.Type.CASENHANCED)
@@ -1111,7 +1114,7 @@ function CreateRedChief()
      RedChief:SetLimitMission(4, AUFTRAG.Type.GROUNDATTACK)
      RedChief:SetLimitMission(4, AUFTRAG.Type.RECON)
      RedChief:SetLimitMission(4, AUFTRAG.Type.BAI)
-     RedChief:SetLimitMission(8, AUFTRAG.Type.INTERCEPT)
+     RedChief:SetLimitMission(4, AUFTRAG.Type.INTERCEPT)
      RedChief:SetLimitMission(4, AUFTRAG.Type.SEAD)
      RedChief:SetLimitMission(4, AUFTRAG.Type.CAPTUREZONE)
      RedChief:SetLimitMission(4, AUFTRAG.Type.CASENHANCED)
@@ -1409,10 +1412,10 @@ function PlayerTaskingBlue()
    --local hereSRSPath = "C:\\Program Files\\DCS-SimpleRadio-Standalone"
    --local hereSRSPort = 5002
     -- local hereSRSGoogle = "C:\\Program Files\\DCS-SimpleRadio-Standalone\\yourkey.json"
-    BlueTaskManagerA2G:SetSRS({130,255},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+    BlueTaskManagerA2G:SetSRS({130,250},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
    
     -- Controller will announce itself under these broadcast frequencies, handy to use cold-start frequencies here of your aircraft
-    BlueTaskManagerA2G:SetSRSBroadcast({130,255},{radio.modulation.AM,radio.modulation.AM})
+    BlueTaskManagerA2G:SetSRSBroadcast({130,250},{radio.modulation.AM,radio.modulation.AM})
    
     -- Example: Manually add an AIRBASE as a target
     --BlueTaskManagerA2G:AddTarget(AIRBASE:FindByName(AIRBASE.Caucasus.Senaki_Kolkhi))
@@ -1465,10 +1468,10 @@ function PlayerTaskingRed()
    --local hereSRSPath = "C:\\Program Files\\DCS-SimpleRadio-Standalone"
    --local hereSRSPort = 5002
     -- local hereSRSGoogle = "C:\\Program Files\\DCS-SimpleRadio-Standalone\\yourkey.json"
-    RedTaskManagerA2G:SetSRS({130,225},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+    RedTaskManagerA2G:SetSRS({130,240},{radio.modulation.AM,radio.modulation.AM},hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
    
     -- Controller will announce itself under these broadcast frequencies, handy to use cold-start frequencies here of your aircraft
-    RedTaskManagerA2G:SetSRSBroadcast({127,225},{radio.modulation.AM,radio.modulation.AM})
+    RedTaskManagerA2G:SetSRSBroadcast({127,240},{radio.modulation.AM,radio.modulation.AM})
    
     -- Example: Manually add an AIRBASE as a target
     --RedTaskManagerA2G:AddTarget(AIRBASE:FindByName(AIRBASE.Caucasus.Senaki_Kolkhi))
@@ -2093,6 +2096,8 @@ TIMER:New(function()
 end):Start(20 * 60, 20 * 60)
 
 
+
+
 -------------
 -----CTLD----
 -------------
@@ -2149,6 +2154,8 @@ Redawacs:__Start(5)
 --End AI GCI-----
 ---------------------
 ---------------------
+TIMER:New(PlayerTaskingBlue()):Start(20)
+TIMER:New(PlayerTaskingRed()):Start(20)
 
 ----------------------------------
 ----------------------------------
