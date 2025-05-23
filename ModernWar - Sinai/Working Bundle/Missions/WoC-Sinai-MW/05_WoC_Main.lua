@@ -608,7 +608,7 @@ local function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDi
     Spawn_Near_airbase(Group_Blue_Mech, airfieldName, MinDistance, MaxDistance)
     Spawn_Near_airbase(Group_Blue_APC, airfieldName, MinDistance, MaxDistance)
     Spawn_Near_airbase(Group_Blue_Armoured, airfieldName, MinDistance, MaxDistance)
-    Spawn_Near_airbase(Group_Blue_Inf, airfieldName, MinDistance, MaxDistance)
+    --Spawn_Near_airbase(Group_Blue_Inf, airfieldName, MinDistance, MaxDistance)
     Spawn_Near_airbase(Group_Blue_Truck, airfieldName, MinDistance, MaxDistance)
 
     env.info("Finished Spawning Blue Groups at airbase "..airfieldName)
@@ -637,7 +637,7 @@ local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDis
      Spawn_Near_airbase(Group_Red_Mech, airfieldName, MinDistance, MaxDistance)
      Spawn_Near_airbase(Group_Red_APC, airfieldName, MinDistance, MaxDistance)
      Spawn_Near_airbase(Group_Red_Armoured, airfieldName, MinDistance, MaxDistance)
-     Spawn_Near_airbase(Group_Red_Inf, airfieldName, MinDistance, MaxDistance)
+     --Spawn_Near_airbase(Group_Red_Inf, airfieldName, MinDistance, MaxDistance)
      Spawn_Near_airbase(Group_Red_Truck, airfieldName, MinDistance, MaxDistance)
  
      env.info("Finished Spawning Red Groups at airbase "..airfieldName)
