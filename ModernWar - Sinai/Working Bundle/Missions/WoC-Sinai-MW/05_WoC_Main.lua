@@ -102,6 +102,24 @@ local function saveStaticObjects()
     end
 end
 
+-- Example of despawning aircraft that haven't moved in 5 minutes
+local function monitorAircraftMovement(aircraft)
+  local unit = UNIT:FindByName(aircraft:GetName())
+  if unit then
+    local startPos = unit:GetPointVec2()
+    SCHEDULER:New(nil, function()
+      if unit and unit:IsAlive() then
+        local currentPos = unit:GetPointVec2()
+        local dist = currentPos:Get2DDistance(startPos)
+        if dist < 20 then -- still at same position, assume stuck
+          env.info("Despawning stuck aircraft: " .. unit:GetName())
+          unit:Destroy()
+        end
+      end
+    end, {}, 300) -- 5 minutes delay
+  end
+end
+
 
 -- Function to save airfields
 local function saveAirfields()
@@ -796,7 +814,13 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     end
     
     BlueChief:AddAirwing(airwing)
-    
+    -- Hook into Airwing spawn destroy in the event the aircraft is stuck
+        airwing:HandleEvent(EVENTS.Birth)
+        function airwing:OnEventBirth(EventData)
+          if EventData.IniObject and EventData.IniObject:IsAircraft() then
+            monitorAircraftMovement(EventData.IniObject)
+          end
+        end
     -- Create a Brigade
     local Brigade=BRIGADE:New(warehouse, airwingname) --Ops.Brigade#BRIGADE
     -- Set spawn zone.
@@ -950,7 +974,13 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     
     RedAirwings[warehouseName] = airwing -- Store the airwing in the table
     RedChief:AddAirwing(airwing)
-
+    -- Hook into Airwing spawn destroy in the event the aircraft is stuck
+        airwing:HandleEvent(EVENTS.Birth)
+        function airwing:OnEventBirth(EventData)
+          if EventData.IniObject and EventData.IniObject:IsAircraft() then
+            monitorAircraftMovement(EventData.IniObject)
+          end
+        end
     -- Create a Brigade
     local Brigade=BRIGADE:New(warehouseName, airwingname) --Ops.Brigade#BRIGADE
     -- Set spawn zone.
