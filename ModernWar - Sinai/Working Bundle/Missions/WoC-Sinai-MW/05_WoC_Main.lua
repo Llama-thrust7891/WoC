@@ -2305,64 +2305,64 @@ end
 -- Schedule functions properly
 --timer.scheduleFunction(destroyzonered, {}, timer.getTime() + 13)
 --timer.scheduleFunction(destroyzoneblue, {}, timer.getTime() + 16)
-local function configureAWACS()
-    -- Create a SET_GROUP to find all AWACS aircraft by type or name
-    local awacsSet = SET_GROUP:New()
-        :FilterCoalitions("blue")
-        :FilterCategories("plane")
-        :FilterTypes({"E-3A", "E-2D", "A-50"}) -- Find AWACS types
-        :FilterPrefixes({"Darkstar", "Magic", "Overlord", "Wizard"}) -- Find AWACS by name
-        :FilterStart()
-
-    -- Iterate through the found AWACS groups and configure them
-    awacsSet:ForEachGroup(
-        function(awacsGroup)
-            local awacsFlight = FLIGHTGROUP:New(awacsGroup)
-
-            -- Default callsign & frequency
-            local callsign = FLIGHTGROUP.Callsign.AWACS_MAGIC
-            local freq = 251.000 -- Default MHz
-
-            -- Assign Callsign & Frequency Based on Name
-            local name = awacsGroup:GetName()
-            if name:find("Darkstar") then
-                callsign = FLIGHTGROUP.Callsign.AWACS_OVERLORD
-                freq = 124.000
-            elseif name:find("Magic") then
-                callsign = FLIGHTGROUP.Callsign.AWACS_MAGIC
-                freq = 134.000
-            elseif name:find("Overlord") then
-                callsign = FLIGHTGROUP.Callsign.AWACS_OVERLORD
-                freq = 144.000
-            elseif name:find("Wizard") then
-                callsign = FLIGHTGROUP.Callsign.AWACS_WIZARD
-                freq = 154.000
-            end
-
-            -- Enable EPLRS (Datalink)
-            awacsFlight:SetOption(AI.Option.AirborneRadar, true) -- Enables airborne radar functions
-            awacsFlight:SetOption(AI.Option.EPLRS, true) -- Ensures EPLRS is enabled for datalink
-
-            -- Set AWACS Radio Frequency
-            awacsFlight:SetRadio(freq)
-
-            -- Set Callsign (e.g., "Magic 1")
-            awacsFlight:SetCallsign(callsign, 1)
-
-            -- Assign AWACS Radar Task
-            local awacsTask = awacsFlight:EnRouteTaskAWACS()
-            awacsFlight:SetTask(awacsTask)
-
-            MESSAGE:New("AWACS & EPLRS Enabled for " .. name .. " on " .. freq .. " MHz", 10):ToAll()
-        end
-    )
-end
+--local function configureAWACS()
+--    -- Create a SET_GROUP to find all AWACS aircraft by type or name
+--    local awacsSet = SET_GROUP:New()
+--        :FilterCoalitions("blue")
+--        :FilterCategories("plane")
+--        --:FilterTypes({"E-3A", "E-2D", "A-50"}) -- Find AWACS types
+--        :FilterPrefixes({"Darkstar", "Magic", "Overlord", "Wizard"}) -- Find AWACS by name
+--        :FilterStart()
+--
+--    -- Iterate through the found AWACS groups and configure them
+--    awacsSet:ForEachGroup(
+--        function(awacsGroup)
+--            local awacsFlight = FLIGHTGROUP:New(awacsGroup)
+--
+--            -- Default callsign & frequency
+--            --local callsign = FLIGHTGROUP.Callsign.AWACS_MAGIC
+--            --local freq = 251.000 -- Default MHz
+--
+--            -- Assign Callsign & Frequency Based on Name
+--            local name = awacsGroup:GetName()
+--            if name:find("Darkstar") then
+--                callsign = FLIGHTGROUP.Callsign.AWACS_OVERLORD
+--                freq = 255.000
+--            elseif name:find("Magic") then
+--                callsign = FLIGHTGROUP.Callsign.AWACS_MAGIC
+--                freq = 245.000
+--            elseif name:find("Overlord") then
+--                callsign = FLIGHTGROUP.Callsign.AWACS_OVERLORD
+--                freq = 144.000
+--            elseif name:find("Wizard") then
+--                callsign = FLIGHTGROUP.Callsign.AWACS_WIZARD
+--                freq = 154.000
+--            end
+--
+--            -- Enable EPLRS (Datalink)
+--            awacsFlight:SetOption(AI.Option.AirborneRadar, true) -- Enables airborne radar functions
+--            awacsFlight:SetOption(AI.Option.EPLRS, true) -- Ensures EPLRS is enabled for datalink
+--
+--            -- Set AWACS Radio Frequency
+--            awacsFlight:SetRadio(freq)
+--
+--            -- Set Callsign (e.g., "Magic 1")
+--            awacsFlight:SetCallsign(callsign, 1)
+--
+--            -- Assign AWACS Radar Task
+--            local awacsTask = awacsFlight:EnRouteTaskAWACS()
+--            awacsFlight:SetTask(awacsTask)
+--
+--            MESSAGE:New("AWACS & EPLRS Enabled for " .. name .. " on " .. freq .. " MHz", 10):ToAll()
+--        end
+--    )
+--end
 
 -- Run once at mission start
-configureAWACS()
+--configureAWACS()
 
 -- Run every 30 seconds to check for new AWACS spawns
-timer.scheduleFunction(configureAWACS, nil, timer.getTime() + 90)
+--timer.scheduleFunction(configureAWACS, nil, timer.getTime() + 90)
 
 
 
