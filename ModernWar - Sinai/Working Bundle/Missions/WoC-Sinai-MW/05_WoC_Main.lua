@@ -749,7 +749,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         SQN1:SetDespawnAfterHolding()
         SQN1:SetDespawnAfterLanding()
         SQN1:SetTakeoffHot()
-        SQN1:SetMissionRange(100)
+        SQN1:SetMissionRange(80)
         airwing:AddSquadron(SQN1)
         
        -- BlueAirwings.squadrons =SQN1
@@ -761,6 +761,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         SQN2:SetDespawnAfterLanding()
         SQN2:SetMissionRange(100)
         SQN2:SetTakeoffHot()
+        SQN2:SetMissionRange(80)
         airwing:AddSquadron(SQN2)
         
        -- BlueAirwings.squadrons =SQN2
@@ -771,6 +772,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         SQN3:SetDespawnAfterLanding()
         SQN3:SetMissionRange(100)
         SQN3:SetTakeoffHot()
+        SQN3:SetMissionRange(80)
         airwing:AddSquadron(SQN3)
         -- BlueAirwings.squadrons =SQN3
 
@@ -791,14 +793,14 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
         SQN4:SetDespawnAfterHolding()
         SQN4:SetDespawnAfterLanding()
-        SQN4:SetMissionRange(60)
+        SQN4:SetMissionRange(40)
         SQN4:SetTakeoffHot()
 
         local SQN5 = SQUADRON:New(Blue_AttackHelo, 4, "Blue CAS Squadron "..airfieldName)
         SQN5:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
         SQN5:SetDespawnAfterHolding()
         SQN5:SetDespawnAfterLanding()
-        SQN5:SetMissionRange(60)
+        SQN5:SetMissionRange(40)
         SQN5:SetTakeoffHot()
 
         airwing:AddSquadron(SQN4)
@@ -836,9 +838,9 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     local platoonArmoured =PLATOON:New(Group_Blue_Armoured, 5,"Blue Armoured Platoon "..airfieldName)
     platoonArmoured:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
         -- Arty platoon.
-    local platoonARTY=PLATOON:New(Group_Blue_Arty, 2, "Blue Artillary Platoon "..airfieldName)
-    platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
-    platoonARTY:AddWeaponRange(UTILS.KiloMetersToNM(10), UTILS.KiloMetersToNM(32)):SetAttribute(GROUP.Attribute.GROUND_ARTILLERY)
+    --local platoonARTY=PLATOON:New(Group_Blue_Arty, 2, "Blue Artillary Platoon "..airfieldName)
+    --platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
+    --platoonARTY:AddWeaponRange(UTILS.KiloMetersToNM(10), UTILS.KiloMetersToNM(32)):SetAttribute(GROUP.Attribute.GROUND_ARTILLERY)
         -- M939 Truck platoon. Can provide ammo in DCS.
     local platoonLogi=PLATOON:New(Group_Blue_Truck, 5, "Blue Logistics Platoon "..airfieldName)
     platoonLogi:AddMissionCapability({AUFTRAG.Type.AMMOSUPPLY}, 70)
@@ -846,11 +848,11 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     --platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
         -- mobile SAM
     local platoonSAM=PLATOON:New(Group_Blue_SAM, 5, "Blue SAM Platoon "..airfieldName)
-    platoonSAM:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
+    platoonSAM:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 100)
    
     -- Add platoons.
     Brigade:AddPlatoon(platoonAPC)
-    Brigade:AddPlatoon(platoonARTY)
+    --Brigade:AddPlatoon(platoonARTY)
     Brigade:AddPlatoon(platoonArmoured)
     Brigade:AddPlatoon(platoonMECH)
     Brigade:AddPlatoon(platoonLogi)
@@ -926,6 +928,7 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     SQN1:SetDespawnAfterHolding()
     SQN1:SetDespawnAfterLanding()
     SQN1:SetTakeoffHot()
+    SQN1:SetMissionRange(60)
 
      
     local SQN2 = SQUADRON:New(Red_Attack, 2, "Red Attack Squadron "..airfieldName)
@@ -933,14 +936,14 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     SQN2:SetDespawnAfterHolding()
     SQN2:SetDespawnAfterLanding()
     SQN2:SetTakeoffHot()
-    
+    SQN2:SetMissionRange(80)    
 
     local SQN3 = SQUADRON:New(Red_LT_Fighter, 2, "Red Light Fighter Squadron "..airfieldName)
     SQN3:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING})
     SQN3:SetDespawnAfterHolding()
     SQN3:SetDespawnAfterLanding()
     SQN3:SetTakeoffHot()
-
+    SQN3:SetMissionRange(60)
     
     Red_payload_Fighter_AA = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 80)
     Red_payload_LTFighter_CAS = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED},50 )
@@ -964,6 +967,7 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     SQN4:SetDespawnAfterHolding()
     SQN4:SetDespawnAfterLanding()
     SQN4:SetTakeoffHot()
+    SQN4:SetMissionRange(40)
     airwing:AddSquadron(SQN4)
     env.info(string.format("###Squadron %s was added to  %s assets###", SQN4:GetName(), airwingName))
     Red_payload_helo_trans = airwing:NewPayload(GROUP:FindByName(Red_Helo.."_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
@@ -996,9 +1000,9 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
         local platoonArmoured =PLATOON:New(Group_Red_Armoured, 5,"Red Armoured Platoon "..airfieldName)
         platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.ARMOUREDATTACK, AUFTRAG.Type.ONGUARD}, 70)
             -- Arty platoon.
-        local platoonARTY=PLATOON:New(Group_Red_Arty, 2, "Red Artillary Platoon "..airfieldName)
-        platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
-        platoonARTY:AddWeaponRange(UTILS.KiloMetersToNM(10), UTILS.KiloMetersToNM(32)):SetAttribute(GROUP.Attribute.GROUND_ARTILLERY)
+        --local platoonARTY=PLATOON:New(Group_Red_Arty, 2, "Red Artillary Platoon "..airfieldName)
+        --platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
+        --platoonARTY:AddWeaponRange(UTILS.KiloMetersToNM(10), UTILS.KiloMetersToNM(32)):SetAttribute(GROUP.Attribute.GROUND_ARTILLERY)
             -- M939 Truck platoon. Can provide ammo in DCS.
         local platoonLogi=PLATOON:New(Group_Red_Truck, 5, "Red Logistics Platoon "..airfieldName)
         platoonLogi:AddMissionCapability({AUFTRAG.Type.AMMOSUPPLY}, 70)
@@ -1006,11 +1010,11 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
        --platoonINF:AddMissionCapability({AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 50)
             -- mobile SAM
         local platoonSAM=PLATOON:New(Group_Red_SAM, 5,  "Red SAM Platoon "..airfieldName)
-        platoonSAM:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 50)
+        platoonSAM:AddMissionCapability({AUFTRAG.Type.AIRDEFENSE}, 100)
            
         -- Add platoons.
         Brigade:AddPlatoon(platoonAPC)
-        Brigade:AddPlatoon(platoonARTY)
+        --Brigade:AddPlatoon(platoonARTY)
         Brigade:AddPlatoon(platoonArmoured)
         Brigade:AddPlatoon(platoonMECH)
         Brigade:AddPlatoon(platoonLogi)
@@ -1072,17 +1076,18 @@ function CreateBlueChief()
 
     BlueChief:SetBorderZones(blueAirfieldszoneset)
     BlueChief:SetConflictZones(redAirfieldszoneset)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.ARTY)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.BARRAGE)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.GROUNDATTACK)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.RECON)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.BAI)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.INTERCEPT)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.SEAD)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.CAPTUREZONE)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.CASENHANCED)
-    BlueChief:SetLimitMission(4, AUFTRAG.Type.CAS)
-    BlueChief:SetLimitMission(100, Total)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.ARTY)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.BARRAGE)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.GROUNDATTACK)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.RECON)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.BAI)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.INTERCEPT)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.SEAD)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.BOMBING)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.CAPTUREZONE)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.CASENHANCED)
+    BlueChief:SetLimitMission(2, AUFTRAG.Type.CAS)
+    BlueChief:SetLimitMission(15, Total)
     
     --testing demo resource lists---
     --local ResourceListEmpty, ResourceIFV=BlueChief:CreateResource(AUFTRAG.Type.PATROLZONE,  1, 3, {GROUP.Attribute.GROUND_TANK,GROUP.Attribute.GROUND_APC})
@@ -1133,7 +1138,7 @@ function CreateBlueChief()
     BlueChief:AddBorderZone(CapZone3)
     BlueChief:AddConflictZone(CapZone4)
     BlueChief:AddConflictZone(CapZone5)
-    BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.AIRCRAFT, AUFTRAG.Type.INTERCEPT, 1)
+    BlueChief:SetResponseOnTarget(1, 2, 8, TARGET.Category.AIRCRAFT, AUFTRAG.Type.INTERCEPT, 1)
     BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.BAI, 1)
     BlueChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.ARMOUREDATTACK, 4)
 
@@ -1154,17 +1159,18 @@ function CreateRedChief()
      RedChief:SetBorderZones(redAirfieldszoneset)
      RedChief:SetConflictZones(blueAirfieldszoneset)
 
-     RedChief:SetLimitMission(4, AUFTRAG.Type.ARTY)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.BARRAGE)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.GROUNDATTACK)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.RECON)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.BAI)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.INTERCEPT)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.SEAD)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.CAPTUREZONE)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.CASENHANCED)
-     RedChief:SetLimitMission(4, AUFTRAG.Type.CAS)
-     RedChief:SetLimitMission(100, Total)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.ARTY)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.BARRAGE)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.GROUNDATTACK)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.BOMBING)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.RECON)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.BAI)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.INTERCEPT)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.SEAD)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.CAPTUREZONE)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.CASENHANCED)
+     RedChief:SetLimitMission(2, AUFTRAG.Type.CAS)
+     RedChief:SetLimitMission(15, Total)
 
      --local ResourceListEmpty, ResourceIFV=RedChief:CreateResource(AUFTRAG.Type.PATROLZONE,  1, 3, {GROUP.Attribute.GROUND_TANK,GROUP.Attribute.GROUND_APC})
      --local ResourceAlpha=RedChief:AddToResource(ResourceListEmpty, AUFTRAG.Type.ONGUARD, 1, 3, GROUP.Attribute.GROUND_TANK)
@@ -1211,9 +1217,9 @@ function CreateRedChief()
     RedChief:AddBorderZone(CapZone3)
     RedChief:AddBorderZone(CapZone4)
     RedChief:AddBorderZone(CapZone5)
-    RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.BAI, 1)
-    RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.GROUND, AUFTRAG.Type.ARMOUREDATTACK, 4)
-    RedChief:SetResponseOnTarget(1, 2, 1, TARGET.Category.AIRCRAFT, AUFTRAG.Type.INTERCEPT, 1)
+    RedChief:SetResponseOnTarget(1, 1, 8, TARGET.Category.GROUND, AUFTRAG.Type.ARMOUREDATTACK, 4)
+    RedChief:SetResponseOnTarget(1, 1, 3, TARGET.Category.AIRCRAFT, AUFTRAG.Type.INTERCEPT, 1)
+    RedChief:SetResponseOnTarget(1, 1, 3, TARGET.Category.GROUND, AUFTRAG.Type.BAI, 1)
 end
 
 env.info("Ops Zones Started")
@@ -2259,8 +2265,8 @@ Redawacs:__Start(5)
 --End AI GCI-----
 ---------------------
 ---------------------
-TIMER:New(PlayerTaskingBlue()):Start(20)
-TIMER:New(PlayerTaskingRed()):Start(20)
+TIMER:New(PlayerTaskingBlue):Start(20)
+TIMER:New(PlayerTaskingRed):Start(20)
 
 ----------------------------------
 ----------------------------------
@@ -2301,6 +2307,33 @@ function destroyzoneblue()
     -- Respawn new group after destruction
     Spawn_Near_airbase(Group_Red_Mech, "Melez", MinDistance, MaxDistance)
 end
+function OpszoneCapture()
+    
+    OPS_Zones:ForEachZone(function(opszone)
+        local coalitionID = opszone:GetOwner() -- 1=red, 2=blue, 0=neutral
+        local airfieldName = opszone:GetName()     -- Adjust if needed
+        local opscoalforces = SET_UNIT:New():FilterZones({opszone:GetZone()}):FilterCoalitions(coalitionID):FilterOnce()
+        local opscoalforcescount = opscoalforces:CountAlive()
+        env.info("Checking number of units in OPSZONE: " .. opszone:GetName() .. " - Coalition: " .. coalitionID .. " - Count: " .. opscoalforcescount)
+        if opscoalforcescount < 10 then
+            env.info("Launching assault against OPSZONE: " .. opszone:GetName())
+            if coalitionID == coalition.side.RED then
+                -- Zone is owned by RED, spawn BLUE units
+                Spawn_Near_airbase(Group_Blue_Armoured, airfieldName, 10, 10, true)
+                Spawn_Near_airbase(Group_Blue_Mech, airfieldName, 10, 10, true)
+                Spawn_Near_airbase(Group_Blue_SAM, airfieldName, 10, 10, true)
+            elseif coalitionID == coalition.side.BLUE then
+                -- Zone is owned by BLUE, spawn RED units
+                Spawn_Near_airbase(Group_Red_Armoured, airfieldName, 10, 10, true)
+                Spawn_Near_airbase(Group_Red_Mech, airfieldName, 10, 10, true)
+                Spawn_Near_airbase(Group_Red_SAM, airfieldName, 10, 10, true)
+            end
+        end
+    end)
+end
+
+--TIMER:New(OpszoneCapture):Start(125, 120) -- every 120 seconds after 60s
+
 
 -- Schedule functions properly
 --timer.scheduleFunction(destroyzonered, {}, timer.getTime() + 13)
