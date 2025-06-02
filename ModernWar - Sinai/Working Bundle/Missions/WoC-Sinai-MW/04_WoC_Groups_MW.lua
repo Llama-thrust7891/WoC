@@ -32,4 +32,6 @@ Red_LT_Fighter = "SU-30"
 Red_Attack = "SU-24"
 Red_Helo = "MI-24"
 
+Group_Neutral_Inf = "Neutral_INF_M4_Template"
+
 CW78_Red_Groups = {Group_Red_SAM_Site,Group_Red_SAM,Group_Red_Mech,Group_Red_APC,Group_Red_Armoured,Group_Red_Inf,Group_Red_Truck }
