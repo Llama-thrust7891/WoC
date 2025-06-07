@@ -734,7 +734,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON,AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,SEAD},80)
         SQN1:SetDespawnAfterLanding(true)
         SQN1:SetDespawnAfterHolding(true)
-        SQN1:SetTakeoffCold()
+        SQN1:SetTakeoffHot()
         SQN1:SetMissionRange(80)
         airwing:AddSquadron(SQN1)
         
@@ -746,7 +746,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         SQN2:SetDespawnAfterLanding(true)
         SQN2:SetDespawnAfterHolding(true)
         SQN2:SetMissionRange(100)
-        SQN2:SetTakeoffCold()
+        SQN2:SetTakeoffHot()
         SQN2:SetMissionRange(80)
         airwing:AddSquadron(SQN2)
         
@@ -757,7 +757,7 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         SQN3:SetDespawnAfterLanding(true)
         SQN3:SetDespawnAfterHolding(true)
         SQN3:SetMissionRange(100)
-        SQN3:SetTakeoffCold()
+        SQN3:SetTakeoffHot()
         SQN3:SetMissionRange(80)
         airwing:AddSquadron(SQN3)
         -- BlueAirwings.squadrons =SQN3
@@ -780,14 +780,14 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         SQN4:SetDespawnAfterLanding(true)
         SQN4:SetDespawnAfterHolding(true)
         SQN4:SetMissionRange(40)
-        SQN4:SetTakeoffCold()
+        SQN4:SetTakeoffHot()
 
         local SQN5 = SQUADRON:New(Blue_AttackHelo, 4, "Blue CAS Squadron "..airfieldName)
         SQN5:AddMissionCapability({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI,AUFTRAG.Type.ESCORT}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
         SQN5:SetDespawnAfterLanding(true)
         SQN5:SetDespawnAfterHolding(true)
         SQN5:SetMissionRange(40)
-        SQN5:SetTakeoffCold()
+        SQN5:SetTakeoffHot()
 
         airwing:AddSquadron(SQN4)
         airwing:AddSquadron(SQN5)
@@ -913,7 +913,7 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON},80)
     SQN1:SetDespawnAfterLanding(true)
     SQN1:SetDespawnAfterHolding(true)
-    SQN1:SetTakeoffCold()
+    SQN1:SetTakeoffHot()
     SQN1:SetMissionRange(60)
 
      
@@ -921,14 +921,14 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     SQN2:AddMissionCapability({AUFTRAG.Type.SEAD,AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.SEAD},80)
     SQN2:SetDespawnAfterLanding(true)
     SQN2:SetDespawnAfterHolding(true)
-    SQN2:SetTakeoffCold()
+    SQN2:SetTakeoffHot()
     SQN2:SetMissionRange(80)    
 
     local SQN3 = SQUADRON:New(Red_LT_Fighter, 2, "Red Light Fighter Squadron "..airfieldName)
     SQN3:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},70)
     SQN3:SetDespawnAfterLanding(true)
     SQN3:SetDespawnAfterHolding(true)
-    SQN3:SetTakeoffCold()
+    SQN3:SetTakeoffHot()
     SQN3:SetMissionRange(60)
     
     Red_payload_Fighter_AA = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON}, 90)
@@ -952,7 +952,7 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.OPSTRANSPORT,AUFTRAG.Type.CAS, AUFTRAG.Type.BAI,AUFTRAG.Type.ESCORT}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
     SQN4:SetDespawnAfterLanding(true)
     SQN4:SetDespawnAfterHolding(true)
-    SQN4:SetTakeoffCold()
+    SQN4:SetTakeoffHot()
     SQN4:SetMissionRange(40)
     airwing:AddSquadron(SQN4)
     env.info(string.format("###Squadron %s was added to  %s assets###", SQN4:GetName(), airwingName))
@@ -2339,30 +2339,30 @@ function OpszoneCapture()
         --unit-level persistence------------
         --Save the units checked to a file--
         ------------------------------------
-            local file = io.open(zoneUnitFile, "w")
-            if not file then return end
-            file:write("ZoneUnitCounts = {\n")
-            OPS_Zones:ForEachZone(function(opszone)
-                local zone = opszone:GetZone()
-                local zoneName = zone:GetName()
-                local set = SET_UNIT:New():FilterZones({zone}):FilterCategories("ground"):FilterOnce()
-                local typeCounts = {}
-                set:ForEachUnit(function(unit)
-                    local typeName = unit:GetTypeName()
-                    typeCounts[typeName] = (typeCounts[typeName] or 0) + 1
-                end)
-                file:write('  ["'..zoneName..'"] = {\n')
-                for typeName, count in pairs(typeCounts) do
-                    file:write('    ["'..typeName..'"] = '..count..',\n')
-                end
-                file:write('  },\n')
-            end)
-            file:write("}\n")
-            file:close()
-            env.info("Zone unit counts saved (unit-level, OPS_Zones).")
-        ------------------------------
-        ---finish unit persistence----
-        ------------------------------
+        --    local file = io.open(zoneUnitFile, "w")
+        --    if not file then return end
+        --    file:write("ZoneUnitCounts = {\n")
+        --    OPS_Zones:ForEachZone(function(opszone)
+        --        local zone = opszone:GetZone()
+        --        local zoneName = zone:GetName()
+        --        local set = SET_UNIT:New():FilterZones({zone}):FilterCategories("ground"):FilterOnce()
+        --        local typeCounts = {}
+        --        set:ForEachUnit(function(unit)
+        --            local typeName = unit:GetTypeName()
+        --            typeCounts[typeName] = (typeCounts[typeName] or 0) + 1
+        --        end)
+        --        file:write('  ["'..zoneName..'"] = {\n')
+        --        for typeName, count in pairs(typeCounts) do
+        --            file:write('    ["'..typeName..'"] = '..count..',\n')
+        --        end
+        --        file:write('  },\n')
+        --    end)
+        --    file:write("}\n")
+        --    file:close()
+        --    env.info("Zone unit counts saved (unit-level, OPS_Zones).")
+        --------------------------------
+        -----finish unit persistence----
+        --------------------------------
         if opscoalforcescount < 5 then
             env.info("Launching assault against OPSZONE: " .. airfieldName)
             if coalitionID == 1 then
@@ -2895,68 +2895,13 @@ function RestartAllATCGroundOps()
     end
 end
 
-function ForceStuckFlightsToReadyTaxiIfNoTaxiing()
-    local now = timer.getTime()
-    for abName, atc in pairs(ATC_Controllers) do
-        local taxiing = atc:GetFlights("TAXIOUT", nil, nil)
-        local taxiingCount = taxiing and #taxiing or 0
 
-        if taxiingCount == 0 then
-            local flights = atc:GetFlights("PARKING", nil, nil)
-            for _, flight in ipairs(flights or {}) do
-                if flight.Tparking and (now - flight.Tparking > 600) then -- 10 minutes
-                    if flight.Group and flight.Group:IsAlive() then
-                        atc:SetFlightStatus(flight, "READYTX")
-                        env.info(string.format("Force-taxi: %s at %s set to READYTX after %d seconds in PARKING", flight.Group:GetName(), abName, now - flight.Tparking))
-                    else
-                        env.info("Skipped force-taxi: flight group is nil or not alive")
-                    end
-                end
-            end
-        end
-    end
+-- This function will be called for every FLIGHTGROUP when it is spawned
+function FLIGHTGROUP:onafterSpawned(From, Event, To)
+    -- Set the group ready for takeoff after a delay (e.g., 10 seconds)
+    self:SetReadyForTakeoff(true, 10)
+    env.info("FLIGHTGROUP " .. self:GetName() .. " is now ready for takeoff.")
 end
-function DespawnStuckFlights()
-    local now = timer.getTime()
-    local foundStuck = false
-    for abName, atc in pairs(ATC_Controllers) do
-        local parkingFlights = atc:GetFlights("PARKING", nil, nil)
-        for _, flight in ipairs(parkingFlights or {}) do
-            if flight.Tparking and (now - flight.Tparking > 1200) then -- 20 minutes
-                if flight.Group and flight.Group:IsAlive() and not flight.Group:IsPlayer() then
-                    env.info(string.format("Despawning stuck flight (PARKING): %s at %s after %d seconds", flight.Group:GetName(), abName, now - flight.Tparking))
-                    flight.Group:Destroy(true)
-                    foundStuck = true
-                else
-                    env.info("Skipped despawn: flight group is nil, not alive, or is a player")
-                end
-            end
-        end
-        local taxiReturnFlights = atc:GetFlights("TAXIRETURN", nil, nil) or atc:GetFlights("TAXIIN", nil, nil)
-        for _, flight in ipairs(taxiReturnFlights or {}) do
-            local tTaxiReturn = flight.Ttaxireturn or flight.Ttaxiin
-            if tTaxiReturn and (now - tTaxiReturn > 300) then -- 5 minutes
-                if flight.Group and flight.Group:IsAlive() and not flight.Group:IsPlayer() then
-                    env.info(string.format("Despawning stuck flight (TAXIRETURN/TAXIIN): %s at %s after %d seconds", flight.Group:GetName(), abName, now - tTaxiReturn))
-                    flight.Group:Destroy(true)
-                    foundStuck = true
-                else
-                    env.info("Skipped despawn: flight group is nil, not alive, or is a player")
-                end
-            end
-        end
-    end
-    if foundStuck then
-        env.info("Stuck flights found and cleaned up, rechecking in 30 seconds.")
-        TIMER:New(DespawnStuckFlights):Start(30)
-    end
-end
-
-
---TIMER:New(DespawnStuckFlights):Start(300, 300) -- Regular check every 5 minutes
---TIMER:New(ForceStuckFlightsToReadyTaxiIfNoTaxiing):Start(60*5, 60*5) -- Check every 5 minutes
-
-
 
 
 ---------------
@@ -2965,25 +2910,9 @@ end
 
 -- Schedule menu creation at mission start or after a delay
 SCHEDULER:New(nil, AddMenuForAllPlayers, {}, 12,30)
---SCHEDULER:New(nil, RedTaskManagerA2G:SetMenuName("SnakeEyes"),{},12,30)
---SCHEDULER:New(nil, BlueTaskManagerA2G:SetMenuName("Ghost Bat"),{},12,30)
+
 
 ATCGroundOps()
-
----Blue---
---local CapZone1 = ZONE:FindByName("CAP_Zone_E")
---local CapZone2 = ZONE:FindByName("CAP_Zone_SE")
---local CapZone3 = ZONE:FindByName("CAP_Zone_Mid")
---local CapZone7 = ZONE:FindByName("CAP_Zone_DSE")
---local CapZone10 = ZONE:FindByName("CAP_Zone_N_E"
---local CapZone11 = ZONE:FindByName("CAP_Zone_DNE")
----Both---
---local CapZone6 = ZONE:FindByName("CAP_Zone_Mid_S")
----Red---
---local CapZone4 = ZONE:FindByName("CAP_Zone_Mid")
---local CapZone5 = ZONE:FindByName("CAP_Zone_W")
---local CapZone8 = ZONE:FindByName("CAP_Zone_DSW")
---local CapZone9 = ZONE:FindByName("CAP_Zone_N_W")
 
 
 
@@ -3074,8 +3003,10 @@ ATCGroundOps()
 --max missions per player is 6
 --max missions per coalition is 20
 --Removed Artillery units from the Ground Brigades 
-
-----Change Log for **WoC - Sinai 6.4**
+--```
+--Change Log for **WoC - Sinai 6.4**
+--
+--Airbase capture persistence is now working captured airfields will be remembered but defending units \squadrons will be refreshed every 8 hours.
 --Implemented ATC Ground control you can Access Airbase info and request taxi\takeoff through F10 
 --you must request taxi to remove the taxi guard.
 --
@@ -3088,7 +3019,6 @@ ATCGroundOps()
 --Added player menu to request Escort missions for their group.
 --Added player menu to view and release active missions.
 --Added player menu to request G2G missions to the nearest friendly and enemy airbases.
-
 --updated ground unit mission sets.
 --GCI Cap staging zones now drawn on the map for both sides.
 --Fixed a bug with Red AWACS not spawning correctly. updated the Datalink awacs to be immortal,invis and infinite fuel.
@@ -3102,6 +3032,5 @@ ATCGroundOps()
 --tuning the ATC Ground ops is still ongoing, aircraft can still get stuck on the ground, but this should be less frequent.
 --added in mission restart every 8 hours with warning message to players.
 --made progress on unit persistence but not yet implemented.
-
-
+--
 --```
