@@ -3,304 +3,173 @@
 -----------------Wings of Conflict Mission Script----------------------
 -----------------------------------------------------------------------
 -----------------------------------------------------------------------
-
-
 -----------------------------------------------------------------------
------------------------------------------------------------------------
-------------------Start of Persistence Script--------------------------
------------------------------------------------------------------------
+-- Simple Persistence for blueAirfields and redAirfields only
 -----------------------------------------------------------------------
 
-local filepath = lfs.writedir() .. "\\Missions\\WoC-Sinai\\Save\\"
+local filepath = lfs.writedir() .. "\\Missions\\WoC-Sinai-MW\\Save\\"
+local airfieldsFile = filepath .. "airfields.lua"
+local zoneUnitFile = filepath .. "zone_units.lua"
 
--- Function to create the directory if it doesn't exist
+-- Ensure the directory exists
 local function createDirectory(path)
     local command = 'mkdir "' .. path .. '"'
     os.execute(command)
 end
-
--- Ensure the directory exists
 createDirectory(filepath)
 
--- Define the zones dynamically using SET_ZONE
-local zonesToCheck = SET_ZONE:New():FilterStart()
+-- Save function
+function saveAirfields()
+    local file = io.open(airfieldsFile, "w")
+    if file then
+        file:write("blueAirfields = {\n")
+        for _, name in ipairs(blueAirfields or {}) do
+            file:write('    "' .. name .. '",\n')
+        end
+        file:write("}\n")
+        file:write("redAirfields = {\n")
+        for _, name in ipairs(redAirfields or {}) do
+            file:write('    "' .. name .. '",\n')
+        end
+        file:write("}\n")
+        file:close()
+        env.info("Airfields saved to " .. airfieldsFile)
+    else
+        env.info("Failed to save airfields")
+    end
+end
 
--- Function to save unit locations within zones
-local function saveUnitLocationsInZones()
-    local unitsInZones = {}
-
-    zonesToCheck:ForEachZone(function(zone)
+function saveZoneUnitCounts(zones)
+    local file = io.open(zoneUnitFile, "w")
+    if not file then return end
+    file:write("ZoneUnitCounts = {\n")
+    for _, zone in ipairs(zones) do
         local zoneName = zone:GetName()
-        local unitsInZone = mist.getUnitsInZones(mist.makeUnitTable({'[all][vehicle]'}), {zoneName}, 'cylinder')
-        for _, unit in ipairs(unitsInZone) do
-            local unitPos = unit:getPosition().p
-            table.insert(unitsInZones, {
-                unitName = unit:getName(),
-                zoneName = zoneName,
-                position = {x = unitPos.x, y = unitPos.y, z = unitPos.z}
-            })
+        local set = SET_UNIT:New():FilterZones({zone}):FilterCategoryGround():FilterOnce()
+        local typeCounts = {}
+        set:ForEachUnit(function(unit)
+            local typeName = unit:GetTypeName()
+            typeCounts[typeName] = (typeCounts[typeName] or 0) + 1
+        end)
+        file:write('  ["'..zoneName..'"] = {\n')
+        for typeName, count in pairs(typeCounts) do
+            file:write('    ["'..typeName..'"] = '..count..',\n')
         end
-    end)
-
-    -- Save the data to a file
-    local fileName = filepath .. "unit_locations_in_zones.lua"
-    local file = io.open(fileName, "w")
-    if file then
-        file:write("unitsInZones = {\n")
-        for _, unitData in ipairs(unitsInZones) do
-            file:write("    {\n")
-            file:write('        unitName = "' .. unitData.unitName .. '",\n')
-            file:write('        zoneName = "' .. unitData.zoneName .. '",\n')
-            file:write("        position = {x = " .. unitData.position.x .. ", y = " .. unitData.position.y .. ", z = " .. unitData.position.z .. "},\n")
-            file:write("    },\n")
-        end
-        file:write("}\n")
-        file:close()
-        trigger.action.outText("Unit locations saved to " .. fileName, 10)
-    else
-        trigger.action.outText("Failed to save unit locations", 10)
+        file:write('  },\n')
     end
+    file:write("}\n")
+    file:close()
+    env.info("Zone unit counts saved (unit-level).")
 end
 
--- Function to save static objects
-local function saveStaticObjects()
-    local staticObjects = {}
-
-    local statics = SET_STATIC:New():FilterStart()
-    statics:ForEachStatic(function(static)
-        local staticPos = static:GetPosition().p
-        table.insert(staticObjects, {
-            staticName = static:GetName(),
-            position = {x = staticPos.x, y = staticPos.y, z = staticPos.z},
-            typeName = static:GetTypeName(),
-            category = static:GetCategory(),
-            country = static:GetCountry(),
-            heading = static:GetHeading()
-        })
-    end)
-
-    -- Save the data to a file
-    local fileName = filepath .. "static_objects.lua"
-    local file = io.open(fileName, "w")
-    if file then
-        file:write("staticObjects = {\n")
-        for _, staticData in ipairs(staticObjects) do
-            file:write("    {\n")
-            file:write('        staticName = "' .. staticData.staticName .. '",\n')
-            file:write("        position = {x = " .. staticData.position.x .. ", y = " .. staticData.position.y .. ", z = " .. staticData.position.z .. "},\n")
-            file:write('        typeName = "' .. staticData.typeName .. '",\n')
-            file:write('        category = "' .. staticData.category .. '",\n')
-            file:write('        country = "' .. staticData.country .. '",\n')
-            file:write("        heading = " .. staticData.heading .. ",\n")
-            file:write("    },\n")
-        end
-        file:write("}\n")
-        file:close()
-        trigger.action.outText("Static objects saved to " .. fileName, 10)
-    else
-        trigger.action.outText("Failed to save static objects", 10)
-    end
-end
-
--- Example of despawning aircraft that haven't moved in 5 minutes
-local function monitorAircraftMovement(aircraft)
-  local unit = UNIT:FindByName(aircraft:GetName())
-  if unit then
-    local startPos = unit:GetPointVec2()
-    SCHEDULER:New(nil, function()
-      if unit and unit:IsAlive() then
-        local currentPos = unit:GetPointVec2()
-        local dist = currentPos:Get2DDistance(startPos)
-        if dist < 20 then -- still at same position, assume stuck
-          env.info("Despawning stuck aircraft: " .. unit:GetName())
-          unit:Destroy()
-        end
-      end
-    end, {}, 300) -- 5 minutes delay
-  end
-end
-
-
--- Function to save airfields
-local function saveAirfields()
-    local airfieldsData = {
-        blueAirfields = {},
-        redAirfields = {}
-    }
-
-    for _, airbase in ipairs(world.getAirbases()) do
-        local airbaseName = airbase:getName()
-        local coalition = airbase:getCoalition()
-
-        if coalition == 2 then
-            table.insert(airfieldsData.blueAirfields, airbaseName)
-        elseif coalition == 1 then
-            table.insert(airfieldsData.redAirfields, airbaseName)
-        end
-    end
-
-    local fileName = filepath .. "airfields.lua"
-    local file = io.open(fileName, "w")
-    if file then
-        file:write("airfieldsData = {\n")
-        file:write("    blueAirfields = {\n")
-        for _, airbaseName in ipairs(airfieldsData.blueAirfields) do
-            file:write('        "' .. airbaseName .. '",\n')
-        end
-        file:write("    },\n")
-        file:write("    redAirfields = {\n")
-        for _, airbaseName in ipairs(airfieldsData.redAirfields) do
-            file:write('        "' .. airbaseName .. '",\n')
-        end
-        file:write("    }\n")
-        file:write("}\n")
-        file:close()
-        trigger.action.outText("Airfields saved to " .. fileName, 10)
-    else
-        trigger.action.outText("Failed to save airfields", 10)
-    end
-end
-
-local function exportAirwingToFile(airwing, fileName)
-    local filePath = filepath .. fileName
-    local file = io.open(filePath, "w")
-
-    if file then
-        file:write("airwing = {\n")
-        file:write("    name = \"" .. airwing:GetName() .. "\",\n")
-        file:write("    squadrons = {\n")
-        for squadronName, squadron in pairs(airwing.squadrons or {}) do
-            file:write("        [\"" .. squadronName .. "\"] = {\n")
-            file:write("            assetCount = " .. squadron:CountAssets() .. ",\n")
-            file:write("        },\n")
-        end
-        file:write("    },\n")
-        file:write("    payloads = {\n")
-        for payloadName, payload in pairs(airwing.payloads or {}) do
-            file:write("        [\"" .. payloadName .. "\"] = {\n")
-            file:write("            count = " .. payload.count .. ",\n")
-            file:write("        },\n")
-        end
-        file:write("    },\n")
-        file:write("}\n")
-        file:close()
-        trigger.action.outText("Airwing exported to " .. filePath, 10)
-    else
-        trigger.action.outText("Failed to export airwing to file", 10)
-    end
-end
-
-local function saveBlueAirwingsToFile()
-    local fileName = filepath .. "BlueAirwings.lua"
-    local file = io.open(fileName, "w")
-
-    if file then
-        file:write("BlueAirwings = {\n")
-        for warehouseName, airwing in pairs(BlueAirwings) do
-            file:write("    [\"" .. warehouseName .. "\"] = {\n")
-            file:write("        name = \"" .. airwing:GetName() .. "\",\n")
-            file:write("        squadrons = {\n")
-            for squadronName, squadron in pairs(airwing.squadrons or {}) do
-                file:write("            [\"" .. squadronName .. "\"] = {\n")
-                file:write("                assetCount = " .. squadron:CountAssets() .. ",\n")
-                file:write("            },\n")
-            end
-            file:write("        },\n")
-            file:write("        payloads = {\n")
-            for payloadName, payload in pairs(airwing.payloads or {}) do
-                file:write("            [\"" .. payloadName .. "\"] = {\n")
-                file:write("                count = " .. payload.count .. ",\n")
-                file:write("            },\n")
-            end
-            file:write("        },\n")
-            file:write("    },\n")
-        end
-        file:write("}\n")
-        file:close()
-        trigger.action.outText("BlueAirwings saved to " .. fileName, 10)
-    else
-        trigger.action.outText("Failed to save BlueAirwings to file", 10)
-    end
-end
--- Schedule the functions to run periodically
---mist.scheduleFunction(saveUnitLocationsInZones, {}, timer.getTime() + 10, 180) -- Runs every 300 seconds (5 minutes)
---mist.scheduleFunction(saveStaticObjects, {}, timer.getTime() + 10, 120) -- Runs every 300 seconds (5 minutes)
-----mist.scheduleFunction(saveAirwingsAndBrigades, {}, timer.getTime() + 10, 120) -- Runs every 300 seconds (5 minutes)
---mist.scheduleFunction(saveAirfields, {}, timer.getTime() + 10, 120) -- Runs every 300 seconds (5 minutes)
-
-local function loadSavedData()
-    local unitLocationsFile = filepath .. "unit_locations_in_zones.lua"
-    local staticObjectsFile = filepath .. "static_objects.lua"
-
-    -- Load unit locations
-    local unitLocations = dofile(unitLocationsFile)
-    if unitLocations then
-        for _, unitData in ipairs(unitLocations.unitsInZones) do
-            local unit = Unit.getByName(unitData.unitName)
-            if unit then
-                unit:setPosition({p = unitData.position})
+-- Load function
+function loadAirfields()
+    if lfs.attributes(airfieldsFile) then
+        local chunk, err = loadfile(airfieldsFile)
+        if chunk then
+            local list = {}
+            setfenv(chunk, list)
+            local ok, _ = pcall(chunk)
+            if ok then
+                blueAirfields = list.blueAirfields or {}
+                redAirfields = list.redAirfields or {}
+                env.info("Airfields loaded from save.")
             else
-                -- Spawn the unit if it doesn't exist
-                mist.dynAdd({
-                    category = 'vehicle',
-                    name = unitData.unitName,
-                    type = unitData.typeName,
-                    x = unitData.position.x,
-                    y = unitData.position.z,
-                    heading = 0
-                })
+                env.info("Error running airfields file.")
             end
-        end
-    end
-
-    -- Load static objects
-    local staticObjects = dofile(staticObjectsFile)
-    if staticObjects then
-        for _, staticData in ipairs(staticObjects.staticObjects) do
-            local static = StaticObject.getByName(staticData.staticName)
-            if not static then
-                -- Spawn the static object if it doesn't exist
-                mist.dynAddStatic({
-                    category = 'static',
-                    name = staticData.staticName,
-                    type = staticData.typeName,
-                    x = staticData.position.x,
-                    y = staticData.position.z,
-                    heading = staticData.heading
-                })
-            end
-        end
-    end
-end
--- Function to load airfields
-local function loadAirfields()
-    local airfieldsFile = filepath .. "airfields.lua"
-    local airfieldsData, loadError = loadfile(airfieldsFile)
-    
-    if airfieldsData then
-        local success, result = pcall(airfieldsData)
-        if success and result then
-            blueAirfields = result.blueAirfields
-            redAirfields = result.redAirfields
-            trigger.action.outText("Airfields loaded successfully", 10)
         else
-            trigger.action.outText("Failed to execute airfields file: " .. tostring(result), 10)
-            sortairfields()
+            env.info("Error loading airfields file: " .. tostring(err))
         end
     else
-        trigger.action.outText("Failed to load airfields file: " .. tostring(loadError), 10)
+        env.info("No airfields save file found, using defaults.")
         sortairfields()
     end
 end
 
------------------------------------------------------------------------
------------------------------------------------------------------------
-------------------End of Persistence Script----------------------------
------------------------------------------------------------------------
------------------------------------------------------------------------
+function loadZoneUnitCounts()
+    if lfs.attributes(zoneUnitFile) then
+        local chunk, err = loadfile(zoneUnitFile)
+        if chunk then
+            local envTable = {}
+            setfenv(chunk, envTable)
+            local ok, _ = pcall(chunk)
+            if ok then
+                return envTable.ZoneUnitCounts or {}
+            end
+        end
+    end
+    return {}
+end
 
+function enforceZoneUnitCountsFromOpsZones()
+    local savedCounts = loadZoneUnitCounts()
+    OPS_Zones:ForEachZone(function(opszone)
+        local zone = opszone:GetZone()
+        local zoneName = zone:GetName()
+        local set = SET_UNIT:New():FilterZones({zone}):FilterCategoryGround():FilterOnce()
+        local currentCounts = {}
+        set:ForEachUnit(function(unit)
+            local typeName = unit:GetTypeName()
+            currentCounts[typeName] = currentCounts[typeName] or {}
+            table.insert(currentCounts[typeName], unit)
+        end)
+        local saved = savedCounts[zoneName] or {}
+        for typeName, units in pairs(currentCounts) do
+            local allowed = saved[typeName] or 0
+            if #units > allowed then
+                -- Destroy extras
+                for i = allowed+1, #units do
+                    local unit = units[i]
+                    if unit and unit:IsAlive() then
+                        unit:Destroy()
+                        env.info("Destroyed extra unit "..unit:GetName().." of type "..typeName.." in zone "..zoneName)
+                    end
+                end
+            end
+        end
+    end)
+end
+local RESTART_INTERVAL = 8 * 60 * 60 -- 8 hours in seconds
 
----Start the main script for setting up the Wings of Conflict Mission--
+function ScheduleMissionRestart()
+    local restartTime = timer.getTime() + RESTART_INTERVAL
+
+    -- Helper to schedule a warning
+    local function scheduleWarning(secondsBefore, message)
+        local warnTime = restartTime - secondsBefore
+        if warnTime > timer.getTime() then
+            TIMER:New(function()
+                MESSAGE:New(message, 30):ToAll()
+            end):Start(warnTime - timer.getTime())
+        end
+    end
+
+    scheduleWarning(30*60, "Mission will restart in 30 minutes!")
+    scheduleWarning(15*60, "Mission will restart in 15 minutes!")
+    scheduleWarning(5*60,  "Mission will restart in 5 minutes!")
+    scheduleWarning(60,     "Mission will restart in 1 minute!")
+
+    -- Schedule the actual restart
+    TIMER:New(function()
+        MESSAGE:New("Mission is restarting now!", 30):ToAll()
+        trigger.action.setUserFlag(9999, 1) -- Use your preferred restart method here
+    end):Start(restartTime - timer.getTime())
+end
+
+-- Call this at mission start
+ScheduleMissionRestart()
+
+-- Usage at mission start:
+-- loadAirfields()
+-- ... (your mission logic)
+-- saveAirfields() -- call when you want to save (e.g. on mission end or periodically)
+--TIMER:New(function()
+--    saveZoneUnitCounts(blueAirfieldszones)
+--    saveZoneUnitCounts(redAirfieldszones)
+--end):Start(133, 120) -- every 120 seconds after 130 seconds
+
+TIMER:New(saveAirfields):Start(130, 120) -- every 120 seconds after 130 seconds
+--Start the main script for setting up the Wings of Conflict Mission--
 
 SamCount = 1
 MinDistance = 300
@@ -445,6 +314,8 @@ function Spawn_Near_airbase(GroupTemplate, airfieldName, Inner, Outer, Patrol)
     SamCount = SamCount + 1
 end
 
+OPS_Zones = SET_OPSZONE:New()
+
 ----create a zone object and opszone object around an airfield
 function CreateAirfieldOpszones(airfieldName)
     local zoneName = "Capture Zone - " .. airfieldName
@@ -506,7 +377,7 @@ function SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
     local Attempts = 0
 
     repeat
-        Spawnpoint = SpawnZone:GetRandomCoordinate(50, 1000, land.SurfaceType.ROAD)
+        Spawnpoint = SpawnZone:GetRandomCoordinate(150, 1000, land.SurfaceType.ROAD)
         if land.getSurfaceType(Spawnpoint) == land.SurfaceType.ROAD then
             ValidSpawn = true
         else
@@ -602,67 +473,174 @@ function SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
 end
 
 
+OPS_Zones = SET_OPSZONE:New()
 
-
-
-
-local function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
-   local parkingCount = aircraftParkingCount +heliParkingCount
-   
-    SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
-    local function spawnmessageblue()
-          env.info("Finished Spawning Blue warehouse at airbase "..airfieldName)
-          end
-     timer.scheduleFunction(spawnmessageblue, {}, timer.getTime() + 1)
-     
-     local parkingData = airbaseParkingSummary(airfieldName)
-      
-    
-     if  parkingData.aircraftParkingCount > 80 then
-        Spawn_Near_airbase(Group_Blue_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
+function CreateAllAirfieldOpszones()
+    for _, airfieldName in ipairs(blueAirfields) do
+        local zone = ZONE_AIRBASE:New(airfieldName, 5000)
+        local opzone = OPSZONE:New(zone):SetDrawZone(true):SetObjectCategories(Object.Category.UNIT):SetUnitCategories(Unit.Category.GROUND_UNIT)
+        OPS_Zones:AddZone(opzone)
     end
-
-    Spawn_Near_airbase(Group_Blue_SAM, airfieldName, MinDistance, MaxDistance)
-    Spawn_Near_airbase(Group_Blue_Mech, airfieldName, MinDistance, MaxDistance)
-    Spawn_Near_airbase(Group_Blue_APC, airfieldName, MinDistance, MaxDistance)
-    Spawn_Near_airbase(Group_Blue_Armoured, airfieldName, MinDistance, MaxDistance)
-    --Spawn_Near_airbase(Group_Blue_Inf, airfieldName, MinDistance, MaxDistance)
-    Spawn_Near_airbase(Group_Blue_Truck, airfieldName, MinDistance, MaxDistance)
-
-    env.info("Finished Spawning Blue Groups at airbase "..airfieldName)
-
-
-    CreateAirfieldOpszones(airfieldName)
-    env.info("Finished Creating Opszone at airbase "..airfieldName)
+    for _, airfieldName in ipairs(redAirfields) do
+        local zone = ZONE_AIRBASE:New(airfieldName, 5000)
+        local opzone = OPSZONE:New(zone):SetDrawZone(true):SetObjectCategories(Object.Category.UNIT):SetUnitCategories(Unit.Category.GROUND_UNIT)
+        OPS_Zones:AddZone(opzone)
+    end
 end
 
-local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
-    local parkingCount = aircraftParkingCount +heliParkingCount
-  
+
+
+
+
+function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
+    local parkingCount = aircraftParkingCount + heliParkingCount
+
+    -- Spawn the warehouse and tents
     SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
-    local function spawnmessageRed()
-        env.info("Finished Spawning Red warehouse at airbase "..airfieldName)
+
+    -- Wait 2 seconds for the warehouse static to be indexed, then spawn units
+    timer.scheduleFunction(function()
+        local airbase = AIRBASE:FindByName(airfieldName)
+        if not airbase then
+            env.info("ERROR: Airbase not found: " .. airfieldName)
+            return
         end
-   timer.scheduleFunction(spawnmessageRed, {}, timer.getTime() + 1)
-    
-    local parkingData = airbaseParkingSummary(airfieldName)
 
-     if parkingData.aircraftParkingCount > 100 then
-         Spawn_Near_airbase(Group_Red_SAM_Site, airfieldName, MinDistance, MaxDistance ,false)
-     end
- 
-     Spawn_Near_airbase(Group_Red_SAM, airfieldName, MinDistance, MaxDistance)
-     Spawn_Near_airbase(Group_Red_Mech, airfieldName, MinDistance, MaxDistance)
-     Spawn_Near_airbase(Group_Red_APC, airfieldName, MinDistance, MaxDistance)
-     Spawn_Near_airbase(Group_Red_Armoured, airfieldName, MinDistance, MaxDistance)
-     --Spawn_Near_airbase(Group_Red_Inf, airfieldName, MinDistance, MaxDistance)
-     Spawn_Near_airbase(Group_Red_Truck, airfieldName, MinDistance, MaxDistance)
- 
-     env.info("Finished Spawning Red Groups at airbase "..airfieldName)
+        local parkingData = airbaseParkingSummary(airfieldName)
+        if not parkingData then
+            env.info("No parking data available for " .. airfieldName)
+            return
+        end
 
-     CreateAirfieldOpszones(airfieldName)
-     env.info("Finished Creating Opszone at airbase "..airfieldName)
- end
+        -- Try to find the warehouse static
+        local warehouse = STATIC:FindByName(warehouseName)
+        local SpawnZone = airbase:GetZone()
+        local WarehouseZone = nil
+
+        if warehouse and warehouse:IsAlive() then
+            local WarehouseCoord = warehouse:GetCoordinate()
+            WarehouseZone = ZONE_RADIUS:New("WarehouseZone", WarehouseCoord:GetVec2(), 200)
+            env.info("Warehouse found for " .. airfieldName .. ", spawning units near warehouse.")
+        else
+            env.info("No warehouse found. Defaulting to airbase zone spawn at " .. airfieldName)
+        end
+
+        -- Helper to spawn a group near the warehouse or fallback zone
+        local function SpawnGroupNearZone(GroupTemplate, Patrol)
+            Patrol = Patrol ~= false -- Default to true if not explicitly set to false
+            local GroupName = airfieldName.."_"..GroupTemplate.."_"..SamCount
+            local Spawnpoint = nil
+
+            if WarehouseZone then
+                Spawnpoint = WarehouseZone:GetRandomCoordinate(80, 200, land.SurfaceType.ROAD)
+            else
+                Spawnpoint = SpawnZone:GetRandomCoordinate(MinDistance, MaxDistance, land.SurfaceType.ROAD)
+            end
+
+            env.info("Spawning "..GroupTemplate.." with name "..GroupName)
+            local Group_Spawn = SPAWN:NewWithAlias(GroupTemplate, GroupName)
+            Group_Spawn:InitPositionCoordinate(Spawnpoint)
+            if Patrol then
+                env.info("no mission assigned")
+            end
+            Group_Spawn:Spawn()
+            SamCount = SamCount + 1
+        end
+
+        -- Spawn groups (SAM site only if enough parking)
+        if parkingData.aircraftParkingCount > 80 then
+            SpawnGroupNearZone(Group_Blue_SAM_Site, false)
+        end
+
+        SpawnGroupNearZone(Group_Blue_SAM)
+        SpawnGroupNearZone(Group_Blue_Mech, true)
+        SpawnGroupNearZone(Group_Blue_APC, true)
+        SpawnGroupNearZone(Group_Blue_Armoured)
+        --SpawnGroupNearZone(Group_Blue_Inf)
+        SpawnGroupNearZone(Group_Blue_Truck)
+
+        env.info("Finished Spawning Blue Groups at airbase "..airfieldName)
+
+        -- Create the opszone after all spawns
+        --CreateAirfieldOpszones(airfieldName)
+        --env.info("Finished Creating Opszone at airbase "..airfieldName)
+        end, {}, timer.getTime() + 1)
+end
+
+function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
+    local parkingCount = aircraftParkingCount + heliParkingCount
+
+    -- Spawn the warehouse and tents
+    SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
+
+    -- Wait 2 seconds for the warehouse static to be indexed, then spawn units
+    timer.scheduleFunction(function()
+        local airbase = AIRBASE:FindByName(airfieldName)
+        if not airbase then
+            env.info("ERROR: Airbase not found: " .. airfieldName)
+            return
+        end
+
+        local parkingData = airbaseParkingSummary(airfieldName)
+        if not parkingData then
+            env.info("No parking data available for " .. airfieldName)
+            return
+        end
+
+        -- Try to find the warehouse static
+        local warehouse = STATIC:FindByName(warehouseName)
+        local SpawnZone = airbase:GetZone()
+        local WarehouseZone = nil
+
+        if warehouse and warehouse:IsAlive() then
+            local WarehouseCoord = warehouse:GetCoordinate()
+            WarehouseZone = ZONE_RADIUS:New("WarehouseZone", WarehouseCoord:GetVec2(), 200)
+            env.info("Warehouse found for " .. airfieldName .. ", spawning units near warehouse.")
+        else
+            env.info("No warehouse found. Defaulting to airbase zone spawn at " .. airfieldName)
+        end
+
+        -- Helper to spawn a group near the warehouse or fallback zone
+        local function SpawnGroupNearZone(GroupTemplate, Patrol)
+            Patrol = Patrol ~= false -- Default to true if not explicitly set to false
+            local GroupName = airfieldName.."_"..GroupTemplate.."_"..SamCount
+            local Spawnpoint = nil
+
+            if WarehouseZone then
+                Spawnpoint = WarehouseZone:GetRandomCoordinate(80, 200, land.SurfaceType.ROAD)
+            else
+                Spawnpoint = SpawnZone:GetRandomCoordinate(MinDistance, MaxDistance, land.SurfaceType.ROAD)
+            end
+
+            env.info("Spawning "..GroupTemplate.." with name "..GroupName)
+            local Group_Spawn = SPAWN:NewWithAlias(GroupTemplate, GroupName)
+            Group_Spawn:InitPositionCoordinate(Spawnpoint)
+            if Patrol then
+                env.info("no mission assigned")
+            end
+            Group_Spawn:Spawn()
+            SamCount = SamCount + 1
+        end
+
+        -- Spawn groups (SAM site only if enough parking)
+        if parkingData.aircraftParkingCount > 100 then
+            SpawnGroupNearZone(Group_Red_SAM_Site, false)
+        end
+
+        SpawnGroupNearZone(Group_Red_SAM)
+        SpawnGroupNearZone(Group_Red_Mech, true)
+        SpawnGroupNearZone(Group_Red_APC, true)
+        SpawnGroupNearZone(Group_Red_Armoured)
+        --SpawnGroupNearZone(Group_Red_Inf)
+        SpawnGroupNearZone(Group_Red_Truck)
+
+        env.info("Finished Spawning Red Groups at airbase "..airfieldName)
+
+        -- Create the opszone after all spawns
+       --CreateAirfieldOpszones(airfieldName)
+       --env.info("Finished Creating Opszone at airbase "..airfieldName)
+    end, {}, timer.getTime() + 2)
+end
 
 
 
@@ -672,6 +650,14 @@ local function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDis
 ----------------Begin Deploying Squadrons and Brigades---------------------------------------
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
+AA_MissionSet = {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON}
+CAS_MissionSet = {AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING}
+SEAD_MissionSet = {AUFTRAG.Type.SEAD}
+HeloAttack_MissionSet = {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI,AUFTRAG.Type.ESCORT}
+HeloTrans_MissionSet = {AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.OPSTRANSPORT}
+APC_MissionSet = {AUFTRAG.Type.CAPTUREZONE,AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD, AUFTRAG.Type.OPSTRANSPORT}
+IFV_MissionSet = {AUFTRAG.Type.CAPTUREZONE,AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD, AUFTRAG.Type.OPSTRANSPORT}
+MBT_MissionSet = {AUFTRAG.Type.CAPTUREZONE,AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}
 
 BlueAirwings = {}
 RedAirwings = {}
@@ -745,8 +731,9 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     if parkingData.aircraftParkingCount > 10 then
         local SQN1NAME =  "Blue Fighter Squadron "..airfieldName
         local SQN1 = SQUADRON:New(Blue_Fighter, 4, SQN1NAME)
-        SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.SEAD, AUFTRAG.Type.CAS,AUFTRAG.Type.CASENHANCED, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING})
+        SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON,AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,SEAD},80)
         SQN1:SetDespawnAfterLanding(true)
+        SQN1:SetDespawnAfterHolding(true)
         SQN1:SetTakeoffCold()
         SQN1:SetMissionRange(80)
         airwing:AddSquadron(SQN1)
@@ -755,8 +742,9 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
 
 
         local SQN2 = SQUADRON:New(Blue_LT_Fighter, 2, "Blue Light Fighter Squadron "..airfieldName)
-        SQN2:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
+        SQN2:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON,AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},70)
         SQN2:SetDespawnAfterLanding(true)
+        SQN2:SetDespawnAfterHolding(true)
         SQN2:SetMissionRange(100)
         SQN2:SetTakeoffCold()
         SQN2:SetMissionRange(80)
@@ -765,8 +753,9 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
        -- BlueAirwings.squadrons =SQN2
 
         local SQN3 = SQUADRON:New(Blue_Attack, 2, "Blue Attack Squadron "..airfieldName)
-        SQN3:AddMissionCapability({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED})
+        SQN3:AddMissionCapability({AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.SEAD},80)
         SQN3:SetDespawnAfterLanding(true)
+        SQN3:SetDespawnAfterHolding(true)
         SQN3:SetMissionRange(100)
         SQN3:SetTakeoffCold()
         SQN3:SetMissionRange(80)
@@ -774,12 +763,12 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
         -- BlueAirwings.squadrons =SQN3
 
 
-       Blue_payload_Fighter_AA= airwing:NewPayload(GROUP:FindByName(Blue_Fighter.."_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 90)
-       Blue_payload_Fighter_CAS= airwing:NewPayload(GROUP:FindByName(Blue_Fighter.."_CAS"), 4, {AUFTRAG.Type.BOMBING, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI},50)
-       Blue_payload_LtFighter_AA= airwing:NewPayload(GROUP:FindByName(Blue_LT_Fighter.."_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT},80)
-       Blue_payload_LtFighter_CAS= airwing:NewPayload(GROUP:FindByName(Blue_LT_Fighter.."_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED},70)
+       Blue_payload_Fighter_AA= airwing:NewPayload(GROUP:FindByName(Blue_Fighter.."_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON}, 90)
+       Blue_payload_Fighter_CAS= airwing:NewPayload(GROUP:FindByName(Blue_Fighter.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
+       Blue_payload_LtFighter_AA= airwing:NewPayload(GROUP:FindByName(Blue_LT_Fighter.."_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON},80)
+       Blue_payload_LtFighter_CAS= airwing:NewPayload(GROUP:FindByName(Blue_LT_Fighter.."_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},70)
        Blue_payload_LtFighter_SEAD= airwing:NewPayload(GROUP:FindByName(Blue_LT_Fighter.."_SEAD"), 4, {AUFTRAG.Type.SEAD},100)
-       Blue_payload_Attack_CAS =airwing:NewPayload(GROUP:FindByName(Blue_Attack.."_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED},80)
+       Blue_payload_Attack_CAS =airwing:NewPayload(GROUP:FindByName(Blue_Attack.."_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},80)
 
     else
         env.info("Not enough aircraft parking spots at " .. airfieldName)
@@ -787,22 +776,24 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
 
     if parkingData.heliParkingCount > 1 or parkingData.aircraftParkingCount > 1 then
         local SQN4 = SQUADRON:New(Blue_Helo, 4, "Blue Transport Squadron "..airfieldName)
-        SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
+        SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.OPSTRANSPORT}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
         SQN4:SetDespawnAfterLanding(true)
+        SQN4:SetDespawnAfterHolding(true)
         SQN4:SetMissionRange(40)
         SQN4:SetTakeoffCold()
 
         local SQN5 = SQUADRON:New(Blue_AttackHelo, 4, "Blue CAS Squadron "..airfieldName)
-        SQN5:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
+        SQN5:AddMissionCapability({AUFTRAG.Type.CAS, AUFTRAG.Type.BAI,AUFTRAG.Type.ESCORT}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
         SQN5:SetDespawnAfterLanding(true)
+        SQN5:SetDespawnAfterHolding(true)
         SQN5:SetMissionRange(40)
         SQN5:SetTakeoffCold()
 
         airwing:AddSquadron(SQN4)
         airwing:AddSquadron(SQN5)
         -- BlueAirwings.squadrons =SQN4
-       Blue_payload_helo_Trans = airwing:NewPayload(GROUP:FindByName(Blue_Helo.."_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
-       Blue_payload_helo_CAS = airwing:NewPayload(GROUP:FindByName(Blue_AttackHelo.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
+       Blue_payload_helo_Trans = airwing:NewPayload(GROUP:FindByName(Blue_Helo.."_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.OPSTRANSPORT},80)
+       Blue_payload_helo_CAS = airwing:NewPayload(GROUP:FindByName(Blue_AttackHelo.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI,AUFTRAG.Type.ESCORT},50)
        
        
 
@@ -824,14 +815,14 @@ function CreateBlueAirwing(warehouse, airwingName, airfieldName)
     Brigade:SetSpawnZone(airbase:GetZone())
         -- TPz Fuchs platoon.
     local platoonAPC=PLATOON:New(Group_Blue_APC, 5, "Blue Motorised Platoon "..airfieldName)
-    platoonAPC:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 60):SetAttribute(GROUP.Attribute.GROUND_APC)
+    platoonAPC:AddMissionCapability(APC_MissionSet, 60):SetAttribute(GROUP.Attribute.GROUND_APC)
         -- Mechanised platoon
     local platoonMECH=PLATOON:New(Group_Blue_Mech, 5,"Blue Mechanised Platoon "..airfieldName)
-    platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 70)
+    platoonMECH:AddMissionCapability(IFV_MissionSet, 70):SetAttribute(GROUP.Attribute.GROUND_APC)
     platoonMECH:AddWeaponRange(UTILS.KiloMetersToNM(0.5), UTILS.KiloMetersToNM(20))
         -- Armoured platoon
     local platoonArmoured =PLATOON:New(Group_Blue_Armoured, 5,"Blue Armoured Platoon "..airfieldName)
-    platoonArmoured:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 80)
+    platoonArmoured:AddMissionCapability(MBT_MissionSet, 80)
         -- Arty platoon.
     --local platoonARTY=PLATOON:New(Group_Blue_Arty, 2, "Blue Artillary Platoon "..airfieldName)
     --platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
@@ -919,29 +910,32 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     if parkingData.aircraftParkingCount > 10 then
 
     local SQN1 = SQUADRON:New(Red_Fighter, 4, "Red Fighter Squadron "..airfieldName)
-    SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED})
+    SQN1:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON},80)
     SQN1:SetDespawnAfterLanding(true)
+    SQN1:SetDespawnAfterHolding(true)
     SQN1:SetTakeoffCold()
     SQN1:SetMissionRange(60)
 
      
     local SQN2 = SQUADRON:New(Red_Attack, 2, "Red Attack Squadron "..airfieldName)
-    SQN2:AddMissionCapability({AUFTRAG.Type.ESCORT, AUFTRAG.Type.SEAD, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED})
+    SQN2:AddMissionCapability({AUFTRAG.Type.SEAD,AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.SEAD},80)
     SQN2:SetDespawnAfterLanding(true)
+    SQN2:SetDespawnAfterHolding(true)
     SQN2:SetTakeoffCold()
     SQN2:SetMissionRange(80)    
 
     local SQN3 = SQUADRON:New(Red_LT_Fighter, 2, "Red Light Fighter Squadron "..airfieldName)
-    SQN3:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING})
+    SQN3:AddMissionCapability({AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},70)
     SQN3:SetDespawnAfterLanding(true)
+    SQN3:SetDespawnAfterHolding(true)
     SQN3:SetTakeoffCold()
     SQN3:SetMissionRange(60)
     
-    Red_payload_Fighter_AA = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT}, 80)
-    Red_payload_LTFighter_CAS = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.CASENHANCED},50 )
-    Red_payload_LtFighter_AA = airwing:NewPayload(GROUP:FindByName(Red_LT_Fighter.."_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT})
+    Red_payload_Fighter_AA = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_AA"), 4, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECON}, 90)
+    Red_payload_LTFighter_CAS = airwing:NewPayload(GROUP:FindByName(Red_Fighter.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING}, 70)
+    Red_payload_LtFighter_AA = airwing:NewPayload(GROUP:FindByName(Red_LT_Fighter.."_AA"), 2, {AUFTRAG.Type.GCICAP, AUFTRAG.Type.CAP, AUFTRAG.Type.INTERCEPT, AUFTRAG.Type.ESCORT, AUFTRAG.Type.RECO},70)
     Red_payload_Attack_SEAD = airwing:NewPayload(GROUP:FindByName(Red_Attack.."_SEAD"), 2, {AUFTRAG.Type.SEAD},90)
-    Red_payload_Attack_CAS = airwing:NewPayload(GROUP:FindByName(Red_Attack.."_CAS"), 2, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING,AUFTRAG.Type.RECON,AUFTRAG.Type.CASENHANCED},90)
+    Red_payload_Attack_CAS = airwing:NewPayload(GROUP:FindByName(Red_Attack.."_CAS"), 2,{AUFTRAG.Type.CAS, AUFTRAG.Type.CASENHANCED,AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING}, 90)
     airwing:AddSquadron(SQN1)
     airwing:AddSquadron(SQN2)
     airwing:AddSquadron(SQN3)
@@ -955,14 +949,15 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     end
     if parkingData.heliParkingCount > 1 or parkingData.aircraftParkingCount > 1 then
     local SQN4 = SQUADRON:New(Red_Helo, 8, "Red Transport Squadron "..airfieldName)
-    SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.CAS, AUFTRAG.Type.BAI}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
+    SQN4:AddMissionCapability({AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.OPSTRANSPORT,AUFTRAG.Type.CAS, AUFTRAG.Type.BAI,AUFTRAG.Type.ESCORT}):SetAttribute(GROUP.Attribute.AIR_TRANSPORTHELO)
     SQN4:SetDespawnAfterLanding(true)
+    SQN4:SetDespawnAfterHolding(true)
     SQN4:SetTakeoffCold()
     SQN4:SetMissionRange(40)
     airwing:AddSquadron(SQN4)
     env.info(string.format("###Squadron %s was added to  %s assets###", SQN4:GetName(), airwingName))
-    Red_payload_helo_trans = airwing:NewPayload(GROUP:FindByName(Red_Helo.."_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT,AUFTRAG.Type.RECON,AUFTRAG.Type.OPSTRANSPORT},80)
-    Red_payload_helo_CAS = airwing:NewPayload(GROUP:FindByName(Red_Helo.."_CAS"), 4, {AUFTRAG.Type.CAS, AUFTRAG.Type.BAI, AUFTRAG.Type.BOMBING},50)
+    Red_payload_helo_trans = airwing:NewPayload(GROUP:FindByName(Red_Helo.."_Trans"), 4, {AUFTRAG.Type.TROOPTRANSPORT, AUFTRAG.Type.CARGOTRANSPORT, AUFTRAG.Type.RECON, AUFTRAG.Type.OPSTRANSPORT},80)
+    Red_payload_helo_CAS = airwing:NewPayload(GROUP:FindByName(Red_Helo.."_CAS"), 4,{AUFTRAG.Type.CAS, AUFTRAG.Type.BAI,AUFTRAG.Type.ESCORT},50)
     else
     env.info("Not enough helicopter parking spots at " .. airfieldName)
     end
@@ -982,14 +977,14 @@ function CreateRedAirwing(warehouse, airwingName, airfieldName)
     Brigade:SetSpawnZone(airbase:GetZone())
         -- TPz Fuchs platoon.
         local platoonAPC=PLATOON:New(Group_Red_APC, 5, "Red Motorised Platoon "..airfieldName)
-        platoonAPC:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD,AUFTRAG.Type.GROUNDATTACK}, 60):SetAttribute(GROUP.Attribute.GROUND_APC)
+        platoonAPC:AddMissionCapability(APC_MissionSet, 60):SetAttribute(GROUP.Attribute.GROUND_APC)
             -- Mechanised platoon
         local platoonMECH=PLATOON:New(Group_Red_Mech, 5, "Red Mechanised Platoon "..airfieldName)
-        platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 70)
+        platoonMECH:AddMissionCapability(IFV_MissionSet, 70)
         platoonMECH:AddWeaponRange(UTILS.KiloMetersToNM(0.5), UTILS.KiloMetersToNM(20))
             -- Armoured platoon
         local platoonArmoured =PLATOON:New(Group_Red_Armoured, 5,"Red Armoured Platoon "..airfieldName)
-        platoonMECH:AddMissionCapability({AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD,AUFTRAG.Type.GROUNDATTACK, AUFTRAG.Type.ONGUARD}, 80)
+        platoonArmoured:AddMissionCapability(MBT_MissionSet, 80)
             -- Arty platoon.
         --local platoonARTY=PLATOON:New(Group_Red_Arty, 2, "Red Artillary Platoon "..airfieldName)
         --platoonARTY:AddMissionCapability({AUFTRAG.Type.ARTY}, 80)
@@ -1042,11 +1037,11 @@ end
 --------------------------------------Begin Chief functions-------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------
-local CapZone1 = ZONE:FindByName("CAP_Zone_E")
+local CapZone1 = ZONE:FindByName("CAP_Zone_E"):DrawZone(2,{0,0,1},1,{0,0,1},.15,4) 
 local CapZone2 = ZONE:FindByName("CAP_Zone_SE")
 local CapZone3 = ZONE:FindByName("CAP_Zone_Mid")
 local CapZone4 = ZONE:FindByName("CAP_Zone_Mid")
-local CapZone5 = ZONE:FindByName("CAP_Zone_W")
+local CapZone5 = ZONE:FindByName("CAP_Zone_W"):DrawZone(2,{1,0,0},1,{1,0,0},.15,4) 
 local CapZone6 = ZONE:FindByName("CAP_Zone_Mid_S")
 local CapZone7 = ZONE:FindByName("CAP_Zone_DSE")
 local CapZone8 = ZONE:FindByName("CAP_Zone_DSW")
@@ -1081,7 +1076,7 @@ function CreateBlueChief()
     BlueChief:SetLimitMission(2, AUFTRAG.Type.INTERCEPT)
     BlueChief:SetLimitMission(2, AUFTRAG.Type.SEAD)
     BlueChief:SetLimitMission(2, AUFTRAG.Type.BOMBING)
-    BlueChief:SetLimitMission(2, AUFTRAG.Type.CAPTUREZONE)
+    BlueChief:SetLimitMission(4, AUFTRAG.Type.CAPTUREZONE)
     BlueChief:SetLimitMission(2, AUFTRAG.Type.CASENHANCED)
     BlueChief:SetLimitMission(2, AUFTRAG.Type.CAS)
     BlueChief:SetLimitMission(20, Total)
@@ -1132,7 +1127,7 @@ function CreateBlueChief()
     BlueChief:AddCapZone(CapZone3,26000,400,180,25)
     BlueChief:AddCapZone(CapZone6,26000,400,180,25)
     BlueChief:AddCapZone(CapZone8,26000,400,180,25)
-    BlueChief:AddCapZone(CapZone6,26000,400,180,25)
+    BlueChief:AddCapZone(CapZone7,26000,400,180,25)
     BlueChief:AddBorderZone(CapZone1)
     BlueChief:AddBorderZone(CapZone2)
     BlueChief:AddBorderZone(CapZone3)
@@ -1172,7 +1167,7 @@ function CreateRedChief()
      RedChief:SetLimitMission(2, AUFTRAG.Type.BAI)
      RedChief:SetLimitMission(2, AUFTRAG.Type.INTERCEPT)
      RedChief:SetLimitMission(2, AUFTRAG.Type.SEAD)
-     RedChief:SetLimitMission(2, AUFTRAG.Type.CAPTUREZONE)
+     RedChief:SetLimitMission(4, AUFTRAG.Type.CAPTUREZONE)
      RedChief:SetLimitMission(2, AUFTRAG.Type.CASENHANCED)
      RedChief:SetLimitMission(2, AUFTRAG.Type.CAS)
      RedChief:SetLimitMission(20, Total)
@@ -1335,37 +1330,29 @@ end
 ----------------------------------------------------------------------------
 ----------------------------------------------------------------------------
 
-local function initializeMission()
-    local unitLocationsFile = filepath .. "unit_locations_in_zones.lua"
-    local staticObjectsFile = filepath .. "static_objects.lua"
-    local airfieldsFile = filepath .. "airfields.lua"
 
-    -- Ensure the directory exists
-    createDirectory(filepath)
-
-    -- Initialize chiefs
-    CreateBlueChief()
-    CreateRedChief()
-
-    if lfs.attributes(unitLocationsFile) and lfs.attributes(staticObjectsFile) and lfs.attributes(airfieldsFile) then
-        loadAirfields()
-        loadSavedData()
-        deployairwings()
-    else
-        -- Call your functions to spawn groups and assets fresh
-        sortairfields()
-        DeployForces()
-        deployairwings()
-    end
-end
+CreateBlueChief()
+CreateRedChief()
+loadAirfields()
+CreateAllAirfieldOpszones()
+OPS_Zones:Start()
+DeployForces()
+deployairwings()
+--TIMER:New(function()
+--    enforceZoneUnitCounts(blueAirfieldszones)
+--    enforceZoneUnitCounts(redAirfieldszones)
+--end):Start(10)  -- Wait 10 secs after mission start
 
 -- Call the initialize function at mission start
-initializeMission()
+--initializeMission()
 RedChief:__Start(1)
 BlueChief:__Start(1)
 
-OPS_Zones = SET_OPSZONE:New():FilterOnce()
-OPS_Zones:Start()
+--OPS_Zones = SET_OPSZONE:New():FilterOnce()
+--OPS_Zones:Start()
+
+--load persistent units
+--enforceZoneUnitCountsFromOpsZones()
 
 
 function monitoropszones()
@@ -2241,8 +2228,7 @@ end
 -- set up in the mission editor with a late activated helo named "Rock#ZONE_POLYGON". Note this also sets the BullsEye to be referenced as "Rock".
 -- The CAP station zone is called "Fremont". We will be on 255 AM.
 local Blueawacs = AWACS:New("Darkstar",BlueAwacsAirwing,"blue"    ,AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_E",ZONE:FindByName("Bulls"),"CAP_Zone_E",255,radio.modulation.AM )
--- set one escort group; this example has two units in the template group, so they can fly a nice formation.
-Blueawacs:SetEscort(1,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+Blueawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
 -- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
 Blueawacs:SetAwacsDetails(CALLSIGN.AWACS.Darkstar,1,30,300,88,25)
 -- Set up SRS on port 5002 - change the below to your path and port
@@ -2259,7 +2245,7 @@ Blueawacs:__Start(5)
 
 local Redawacs = AWACS:New("Magic",RedAwacsAirwing,"red",AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_W",ZONE:FindByName("Bulls"),"CAP_Zone_E",245,radio.modulation.AM )
 -- set one escort group; this example has two units in the template group, so they can fly a nice formation.
-Redawacs:SetEscort(1,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+Redawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
 -- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
 Redawacs:SetAwacsDetails(CALLSIGN.AWACS.Magic,1,30,300,88,25)
 -- Set up SRS on port 5002 - change the below to your path and port
@@ -2278,7 +2264,7 @@ Redawacs:__Start(5)
 ---------------------
 ---------------------
 TIMER:New(PlayerTaskingBlue):Start(20)
-TIMER:New(PlayerTaskingRed):Start(20)
+TIMER:New(PlayerTaskingRed):Start(21)
 
 ----------------------------------
 ----------------------------------
@@ -2321,54 +2307,92 @@ function destroyzoneblue()
 end
 
 function OpszoneCapture()
- 
-    
     OPS_Zones:ForEachZone(function(opszone)
-        local coalitionID = opszone:GetOwner() -- 1=red, 2=blue, 0=neutral
-        local airfieldName = opszone:GetName()     -- Adjust if needed
+        local coalitionID = opszone:GetOwner()
+        local airfieldName = opszone:GetName()
         local coalition = 0
         if coalitionID == 0 then
             coalition = "neutral"
         elseif coalitionID == 1 then
             coalition = "red"
         elseif coalitionID == 2 then
-            coalition = "blue" 
+            coalition = "blue"
         end
+
         local opscoalforces = SET_UNIT:New():FilterZones({opszone:GetZone()}):FilterCoalitions(coalition):FilterOnce()
         local opscoalforcescount = opscoalforces:CountAlive()
         env.info("Checking number of units in OPSZONE: " .. airfieldName .. " - Coalition: " .. coalitionID .. " - Count: " .. opscoalforcescount)
+                -- Save unit counts for this opszone
+        
+    
+        -- Helper to count existing AUFTRAGs for this zone and chief
+        local function CountAuftragsForZone(chief, auftragType, zone)
+            local count = 0
+            for _, mission in pairs(chief:GetMissions() or {}) do
+                if mission and mission.Type == auftragType and mission.Zone and mission.Zone:GetName() == zone:GetName() then
+                    count = count + 1
+                end
+            end
+            return count
+        end
+        ------------------------------------
+        --unit-level persistence------------
+        --Save the units checked to a file--
+        ------------------------------------
+            local file = io.open(zoneUnitFile, "w")
+            if not file then return end
+            file:write("ZoneUnitCounts = {\n")
+            OPS_Zones:ForEachZone(function(opszone)
+                local zone = opszone:GetZone()
+                local zoneName = zone:GetName()
+                local set = SET_UNIT:New():FilterZones({zone}):FilterCategories("ground"):FilterOnce()
+                local typeCounts = {}
+                set:ForEachUnit(function(unit)
+                    local typeName = unit:GetTypeName()
+                    typeCounts[typeName] = (typeCounts[typeName] or 0) + 1
+                end)
+                file:write('  ["'..zoneName..'"] = {\n')
+                for typeName, count in pairs(typeCounts) do
+                    file:write('    ["'..typeName..'"] = '..count..',\n')
+                end
+                file:write('  },\n')
+            end)
+            file:write("}\n")
+            file:close()
+            env.info("Zone unit counts saved (unit-level, OPS_Zones).")
+        ------------------------------
+        ---finish unit persistence----
+        ------------------------------
         if opscoalforcescount < 5 then
             env.info("Launching assault against OPSZONE: " .. airfieldName)
             if coalitionID == 1 then
-                --Assign new auftrag to Cheif
-                local groundpatrol = AUFTRAG:NewPATROLZONE(opszone:GetZone(),80,nil,"On Road")
-                local ADpatrol = AUFTRAG:NewAIRDEFENSE(opszone:GetZone())
-                local Helopatrol = AUFTRAG:NewPATROLZONE(opszone:GetZone(),110,1500)
-                BlueChief:AddMission(groundpatrol)
-                BlueChief:AddMission(ADpatrol)
-                BlueChief:AddMission(Helopatrol)
-                -- Zone is owned by RED, spawn BLUE units
-                --Spawn_Near_airbase(Group_Blue_Armoured, airfieldName, 10, 10, true)
-                --Spawn_Near_airbase(Group_Blue_Mech, airfieldName, 10, 10, true)
-                --Spawn_Near_airbase(Group_Blue_SAM, airfieldName, 10, 10, true)
+                -- RED owns, BLUE attacks
+                local auftragType = AUFTRAG.Type.PATROLZONE
+                local existing = CountAuftragsForZone(BlueChief, auftragType, opszone:GetZone())
+                if existing < 2 then -- Allow up to 2 patrols, adjust as needed
+                    local groundpatrol = AUFTRAG:NewPATROLZONE(opszone:GetZone(),80,nil,"On Road")
+                    BlueChief:AddMission(groundpatrol)
+                    MESSAGE:New("Blue Forces are launching a new patrol against OPSZONE: " .. airfieldName, 20):ToAll()
+                else
+                    env.info("BlueChief already has " .. existing .. " patrol missions for " .. airfieldName)
+                end
             elseif coalitionID == 2 then
-                --Assign new auftrag to Cheif
-                local groundpatrol = AUFTRAG:NewPATROLZONE(opszone:GetZone(),80,nil,"On Road")
-                local ADpatrol = AUFTRAG:NewAIRDEFENSE(opszone:GetZone())
-                local Helopatrol = AUFTRAG:NewPATROLZONE(opszone:GetZone(),110,1500)
-                RedChief:AddMission(groundpatrol)
-                RedChief:AddMission(ADpatrol)
-                RedChief:AddMission(Helopatrol)
-                -- Zone is owned by BLUE, spawn RED units
-               --Spawn_Near_airbase(Group_Red_Armoured, airfieldName, 10, 10, true)
-               --Spawn_Near_airbase(Group_Red_Mech, airfieldName, 10, 10, true)
-               --Spawn_Near_airbase(Group_Red_SAM, airfieldName, 10, 10, true)
+                -- BLUE owns, RED attacks
+                local auftragType = AUFTRAG.Type.PATROLZONE
+                local existing = CountAuftragsForZone(RedChief, auftragType, opszone:GetZone())
+                if existing < 2 then -- Allow up to 2 patrols, adjust as needed
+                    local groundpatrol = AUFTRAG:NewPATROLZONE(opszone:GetZone(),80,nil,"On Road")
+                    RedChief:AddMission(groundpatrol)
+                    MESSAGE:New("Red Forces are launching a new patrol against OPSZONE: " .. airfieldName, 20):ToAll()
+                else
+                    env.info("RedChief already has " .. existing .. " patrol missions for " .. airfieldName)
+                end
             end
         end
     end)
 end
 
-TIMER:New(OpszoneCapture):Start(125, 120) -- every 120 seconds after 60s
+TIMER:New(OpszoneCapture):Start(125, 120) -- every 120 seconds after 125s
 TIMER:New(monitoropszones):Start(60)
 
 
@@ -2378,9 +2402,11 @@ TIMER:New(monitoropszones):Start(60)
 -----Player Cap flight requests-----
 ------------------------------------
 ------------------------------------
-PlayerCAPRequests = {}         -- [playerGroupName] = true/false
-CoalitionCAPCount = { [coalition.side.BLUE] = 0, [coalition.side.RED] = 0 }
-MAX_CAP_PER_COALITION = 3
+PlayerRequests = {}         -- [playerGroupName] = true/false
+PlayerMissions = {}  -- [playerName] = { {type="CAP", id=..., label=...}, ... }
+CoalitionReqCount = { [coalition.side.BLUE] = 0, [coalition.side.RED] = 0 }
+MAX_REQ_PER_COALITION = 20
+MAX_REQ_PER_PLAYER = 6
 
 function CreateCAPZoneForPlayer(playerGroup, zoneObject, label)
     if not playerGroup or not playerGroup:IsAlive() then
@@ -2391,45 +2417,42 @@ function CreateCAPZoneForPlayer(playerGroup, zoneObject, label)
     local playerName = playerGroup:GetName()
     local coalitionSide = playerGroup:GetCoalition()
 
-    -- Check if player already has a CAP mission
-    if PlayerCAPRequests[playerName] then
-        MESSAGE:New("You already have an active CAP mission!", 10):ToGroup(playerGroup)
+    PlayerRequests[playerName] = PlayerRequests[playerName] or 0
+    PlayerMissions[playerName] = PlayerMissions[playerName] or {}
+    if PlayerRequests[playerName] >= MAX_REQ_PER_PLAYER then
+        MESSAGE:New("You already have the maximum number of active missions (" .. MAX_REQ_PER_PLAYER .. ")!", 10):ToGroup(playerGroup)
         return
     end
-
-    -- Check if coalition has reached the limit
-    if CoalitionCAPCount[coalitionSide] >= MAX_CAP_PER_COALITION then
+    if CoalitionReqCount[coalitionSide] >= MAX_REQ_PER_COALITION then
         MESSAGE:New("Your coalition has reached the maximum number of CAP missions!", 10):ToGroup(playerGroup)
         return
     end
 
-    -- Create the CAP zone
     local capZoneName, capZoneRadius, coord
     if zoneObject then
         capZoneName = "CAP_Zone_" .. label .. "_" .. playerName
-        capZoneRadius = zoneObject:GetRadius() or 5000
+        capZoneRadius = zoneObject:GetRadius() or 10000
         coord = zoneObject:GetCoordinate()
     else
         capZoneName = "CAP_Zone_Player_" .. playerName
-        capZoneRadius = 5000
+        capZoneRadius = 10000
         coord = playerGroup:GetCoordinate()
     end
 
     local capZone = ZONE_RADIUS:New(capZoneName, coord:GetVec2(), capZoneRadius)
-    capZone:DrawZone(300, {0,1,0}, 2, {0,1,0}, true) -- Optional: Draw for debug
+    local CapRequest = AUFTRAG:NewCAP(capZone, 30000, 400):SetPriority(20, 1, 3):SetRequiredAssets(2, 2):SetRepeatOnFailure(3):SetDuration(60*30)
 
-    -- Assign the zone to the Chief for CAP missions
     if coalitionSide == coalition.side.BLUE then
-        BlueChief:AddCapZone(capZone, 26000, 400, 180, 25)
+        BlueChief:AddMission(CapRequest)
         MESSAGE:New("Blue CAP zone assigned!", 10):ToGroup(playerGroup)
     elseif coalitionSide == coalition.side.RED then
-        RedChief:AddCapZone(capZone, 26000, 400, 180, 25)
+        RedChief:AddMission(CapRequest)
         MESSAGE:New("Red CAP zone assigned!", 10):ToGroup(playerGroup)
     end
 
-    -- Mark player and coalition as having an active CAP
-    PlayerCAPRequests[playerName] = true
-    CoalitionCAPCount[coalitionSide] = CoalitionCAPCount[coalitionSide] + 1
+    PlayerRequests[playerName] = PlayerRequests[playerName] + 1
+    CoalitionReqCount[coalitionSide] = CoalitionReqCount[coalitionSide] + 1
+    table.insert(PlayerMissions[playerName], {type="CAP", id=capZoneName, label=label or capZoneName})
 end
 
 -- Replace your old functions with wrappers:
@@ -2440,77 +2463,513 @@ end
 function CreateCAPZoneOverPlayer(playerGroup)
     CreateCAPZoneForPlayer(playerGroup, nil, "Player")
 end
-function RemovePlayerCAP(playerGroup)
+
+-- CAS Enhanced Mission (Over Player)
+function RequestCASEnhancedMission(playerGroup)
+    if not playerGroup or not playerGroup:IsAlive() then
+        MESSAGE:New("Your group is not alive or not found!", 10):ToGroup(playerGroup)
+        return
+    end
+
     local playerName = playerGroup:GetName()
     local coalitionSide = playerGroup:GetCoalition()
-    if PlayerCAPRequests[playerName] then
-        PlayerCAPRequests[playerName] = nil
-        CoalitionCAPCount[coalitionSide] = math.max(0, CoalitionCAPCount[coalitionSide] - 1)
-        MESSAGE:New("Your CAP mission has been released.", 10):ToGroup(playerGroup)
+
+    PlayerRequests[playerName] = PlayerRequests[playerName] or 0
+    PlayerMissions[playerName] = PlayerMissions[playerName] or {}
+    if PlayerRequests[playerName] >= MAX_REQ_PER_PLAYER then
+        MESSAGE:New("You already have the maximum number of active missions (" .. MAX_REQ_PER_PLAYER .. ")!", 10):ToGroup(playerGroup)
+        return
     end
+    if CoalitionReqCount[coalitionSide] >= MAX_REQ_PER_COALITION then
+        MESSAGE:New("Your coalition has reached the maximum number of A2A/CAS missions!", 10):ToGroup(playerGroup)
+        return
+    end
+
+    local casZoneName = "CAS_Zone_Player_" .. playerName
+    local casZoneRadius = 10000
+    local coord = playerGroup:GetCoordinate()
+    local casZone = ZONE_RADIUS:New(casZoneName, coord:GetVec2(), casZoneRadius)
+    local altitude = 5000
+    local speed = 350
+    local rangeMax = 25
+    local noEngageZoneSet = nil
+    local targetTypes = {"Helicopters", "Ground Units", "Light armed ships"}
+    local casMission = AUFTRAG:NewCASENHANCED(casZone, altitude, speed, rangeMax, noEngageZoneSet, targetTypes)
+    casMission:SetPriority(20, 1, 3):SetRequiredAssets(2, 2):SetRepeatOnFailure(3):SetDuration(60*30)
+
+    if coalitionSide == coalition.side.BLUE then
+        BlueChief:AddMission(casMission)
+        MESSAGE:New("Blue CAS Enhanced mission assigned at your location!", 10):ToGroup(playerGroup)
+    elseif coalitionSide == coalition.side.RED then
+        RedChief:AddMission(casMission)
+        MESSAGE:New("Red CAS Enhanced mission assigned at your location!", 10):ToGroup(playerGroup)
+    end
+
+    PlayerRequests[playerName] = PlayerRequests[playerName] + 1
+    CoalitionReqCount[coalitionSide] = CoalitionReqCount[coalitionSide] + 1
+    table.insert(PlayerMissions[playerName], {type="CAS", id=casZoneName, label="CAS Over Player"})
 end
 
-function AddPresetCAPZoneMenuForAllPlayers()
+function AddDynamicNearestCASMenu(playerGroup, A2GMenu)
+    local playerCoalition = playerGroup:GetCoalition()
+    local enemyAirfields = (playerCoalition == coalition.side.BLUE) and redAirfields or blueAirfields
+
+    MENU_GROUP_COMMAND:New(playerGroup, "Refresh Nearest Enemy airfields", A2GMenu, function()
+        local playerCoord = playerGroup:GetCoordinate()
+        local airfieldDistances = {}
+        for _, airfieldName in ipairs(enemyAirfields) do
+            local airbase = AIRBASE:FindByName(airfieldName)
+            if airbase then
+                local afCoord = airbase:GetCoordinate()
+                local dist = playerCoord:Get2DDistance(afCoord)
+                table.insert(airfieldDistances, {name = airfieldName, distance = dist})
+            end
+        end
+        table.sort(airfieldDistances, function(a, b) return a.distance < b.distance end)
+        local dynamicMenu = MENU_GROUP:New(playerGroup, "CAS at Nearest Enemy Airbase (Now)", A2GMenu)
+        for i = 1, math.min(5, #airfieldDistances) do
+            local airfieldName = airfieldDistances[i].name
+            MENU_GROUP_COMMAND:New(playerGroup, "Request CAS at " .. airfieldName, dynamicMenu, function()
+                RequestCASEnhancedAtAirbase(playerGroup, airfieldName)
+            end)
+        end
+    end)
+end
+
+function RequestCASEnhancedMission(playerGroup)
+    if not playerGroup or not playerGroup:IsAlive() then
+        MESSAGE:New("Your group is not alive or not found!", 10):ToGroup(playerGroup)
+        return
+    end
+
+    local playerName = playerGroup:GetName()
+    local coalitionSide = playerGroup:GetCoalition()
+
+    PlayerRequests[playerName] = PlayerRequests[playerName] or 0
+    if PlayerRequests[playerName] >= MAX_REQ_PER_PLAYER then
+        MESSAGE:New("You already have the maximum number of active missions (" .. MAX_REQ_PER_PLAYER .. ")!", 10):ToGroup(playerGroup)
+        return
+    end
+
+    if CoalitionReqCount[coalitionSide] >= MAX_REQ_PER_COALITION then
+        MESSAGE:New("Your coalition has reached the maximum number of A2A/CAS missions!", 10):ToGroup(playerGroup)
+        return
+    end
+
+    local casZoneName = "CAS_Zone_Player_" .. playerName
+    local casZoneRadius = 10000
+    local coord = playerGroup:GetCoordinate()
+    local casZone = ZONE_RADIUS:New(casZoneName, coord:GetVec2(), casZoneRadius)
+    casZone:DrawZone(300, {1,1,0}, 2, {1,1,0}, true)
+
+    local altitude = 5000
+    local speed = 350
+    local rangeMax = 25
+    local noEngageZoneSet = nil
+    local targetTypes = {"Helicopters", "Ground Units", "Light armed ships"}
+
+    local casMission = AUFTRAG:NewCASENHANCED(casZone, altitude, speed, rangeMax, noEngageZoneSet, targetTypes)
+    casMission:SetPriority(20, 1, 3):SetRequiredAssets(2, 2):SetRepeatOnFailure(3):SetDuration(60*30)
+
+    if coalitionSide == coalition.side.BLUE then
+        BlueChief:AddMission(casMission)
+        MESSAGE:New("Blue CAS Enhanced mission assigned at your location!", 10):ToGroup(playerGroup)
+    elseif coalitionSide == coalition.side.RED then
+        RedChief:AddMission(casMission)
+        MESSAGE:New("Red CAS Enhanced mission assigned at your location!", 10):ToGroup(playerGroup)
+    end
+
+    PlayerRequests[playerName] = PlayerRequests[playerName] + 1
+    CoalitionReqCount[coalitionSide] = CoalitionReqCount[coalitionSide] + 1
+end
+
+-- Helper function to request CAS at a specific airbase
+function RequestCASEnhancedAtAirbase(playerGroup, airfieldName)
+    if not playerGroup or not playerGroup:IsAlive() then
+        MESSAGE:New("Your group is not alive or not found!", 10):ToGroup(playerGroup)
+        return
+    end
+
+    local playerName = playerGroup:GetName()
+    local coalitionSide = playerGroup:GetCoalition()
+
+    PlayerRequests[playerName] = PlayerRequests[playerName] or 0
+    PlayerMissions[playerName] = PlayerMissions[playerName] or {}
+    if PlayerRequests[playerName] >= MAX_REQ_PER_PLAYER then
+        MESSAGE:New("You already have the maximum number of active missions (" .. MAX_REQ_PER_PLAYER .. ")!", 10):ToGroup(playerGroup)
+        return
+    end
+    if CoalitionReqCount[coalitionSide] >= MAX_REQ_PER_COALITION then
+        MESSAGE:New("Your coalition has reached the maximum number of A2A/CAS missions!", 10):ToGroup(playerGroup)
+        return
+    end
+
+    local airbase = AIRBASE:FindByName(airfieldName)
+    if not airbase then
+        MESSAGE:New("Airbase not found: " .. airfieldName, 10):ToGroup(playerGroup)
+        return
+    end
+
+    local casZoneName = "CAS_Zone_" .. airfieldName .. "_" .. playerName
+    local casZoneRadius = 10000
+    local coord = airbase:GetCoordinate()
+    local casZone = ZONE_RADIUS:New(casZoneName, coord:GetVec2(), casZoneRadius)
+    local altitude = 2000
+    local speed = 350
+    local rangeMax = 25
+    local noEngageZoneSet = nil
+    local targetTypes = {"Helicopters", "Ground Units", "Light armed ships"}
+    local casMission = AUFTRAG:NewCASENHANCED(casZone, altitude, speed, rangeMax, noEngageZoneSet, targetTypes)
+    casMission:SetPriority(20, 1, 3):SetRequiredAssets(2, 2):SetRepeatOnFailure(3):SetDuration(60*30)
+
+    if coalitionSide == coalition.side.BLUE then
+        BlueChief:AddMission(casMission)
+        MESSAGE:New("Blue CAS Enhanced mission assigned at " .. airfieldName, 10):ToGroup(playerGroup)
+    elseif coalitionSide == coalition.side.RED then
+        RedChief:AddMission(casMission)
+        MESSAGE:New("Red CAS Enhanced mission assigned at " .. airfieldName, 10):ToGroup(playerGroup)
+    end
+
+    PlayerRequests[playerName] = PlayerRequests[playerName] + 1
+    CoalitionReqCount[coalitionSide] = CoalitionReqCount[coalitionSide] + 1
+    table.insert(PlayerMissions[playerName], {type="CAS", id=casZoneName, label="CAS at " .. airfieldName})
+end
+function AddDynamicNearestCAPMenus(playerGroup, A2AMenu)
+    local playerCoalition = playerGroup:GetCoalition()
+    local friendlyAirfields = (playerCoalition == coalition.side.BLUE) and blueAirfields or redAirfields
+    local enemyAirfields = (playerCoalition == coalition.side.BLUE) and redAirfields or blueAirfields
+
+    -- Helper to build sorted nearest list
+    local function getNearestAirfields(airfieldList, playerCoord)
+        local airfieldDistances = {}
+        for _, airfieldName in ipairs(airfieldList) do
+            local airbase = AIRBASE:FindByName(airfieldName)
+            if airbase then
+                local afCoord = airbase:GetCoordinate()
+                local dist = playerCoord:Get2DDistance(afCoord)
+                table.insert(airfieldDistances, {name = airfieldName, distance = dist})
+            end
+        end
+        table.sort(airfieldDistances, function(a, b) return a.distance < b.distance end)
+        return airfieldDistances
+    end
+
+    -- Single menu item to update nearest airfields
+    MENU_GROUP_COMMAND:New(playerGroup, "Update Nearest Airfields", A2AMenu, function()
+        -- Optionally: Remove previous dynamic menus here if you want to avoid clutter
+
+        local playerCoord = playerGroup:GetCoordinate()
+
+        -- Friendly submenu
+        local nearestFriendly = getNearestAirfields(friendlyAirfields, playerCoord)
+        local friendlyMenu = MENU_GROUP:New(playerGroup, "Nearest Friendly Airfields", A2AMenu)
+        for i = 1, math.min(5, #nearestFriendly) do
+            local airfieldName = nearestFriendly[i].name
+            MENU_GROUP_COMMAND:New(playerGroup, "Request CAP at " .. airfieldName, friendlyMenu, function()
+                CreateCAPZoneOverNamedZone(playerGroup, AIRBASE:FindByName(airfieldName):GetZone(), airfieldName)
+            end)
+        end
+
+        -- Enemy submenu
+        local nearestEnemy = getNearestAirfields(enemyAirfields, playerCoord)
+        local enemyMenu = MENU_GROUP:New(playerGroup, "Nearest Enemy Airfields", A2AMenu)
+        for i = 1, math.min(5, #nearestEnemy) do
+            local airfieldName = nearestEnemy[i].name
+            MENU_GROUP_COMMAND:New(playerGroup, "Request CAP at " .. airfieldName, enemyMenu, function()
+                CreateCAPZoneOverNamedZone(playerGroup, AIRBASE:FindByName(airfieldName):GetZone(), airfieldName)
+            end)
+        end
+    end)
+end
+function RequestEscortMission(playerGroup)
+    if not playerGroup or not playerGroup:IsAlive() then
+        MESSAGE:New("Your group is not alive or not found!", 10):ToGroup(playerGroup)
+        return
+    end
+
+    local playerName = playerGroup:GetName()
+    local coalitionSide = playerGroup:GetCoalition()
+
+    PlayerRequests[playerName] = PlayerRequests[playerName] or 0
+    PlayerMissions[playerName] = PlayerMissions[playerName] or {}
+    if PlayerRequests[playerName] >= MAX_REQ_PER_PLAYER then
+        MESSAGE:New("You already have the maximum number of active missions (" .. MAX_REQ_PER_PLAYER .. ")!", 10):ToGroup(playerGroup)
+        return
+    end
+    if CoalitionReqCount[coalitionSide] >= MAX_REQ_PER_COALITION then
+        MESSAGE:New("Your coalition has reached the maximum number of A2A missions!", 10):ToGroup(playerGroup)
+        return
+    end
+
+    local offset = {x = -100, y = 0, z = 200}
+    local engageDistance = 32
+    local targetTypes = {"Air"}
+    local escortMission = AUFTRAG:NewESCORT(playerGroup, offset, engageDistance, targetTypes)
+    escortMission:SetPriority(20, 1, 3):SetRequiredAssets(2, 2):SetRepeatOnFailure(3):SetDuration(60*30)
+
+    if coalitionSide == coalition.side.BLUE then
+        BlueChief:AddMission(escortMission)
+        MESSAGE:New("Blue escort mission assigned to your group!", 10):ToGroup(playerGroup)
+    elseif coalitionSide == coalition.side.RED then
+        RedChief:AddMission(escortMission)
+        MESSAGE:New("Red escort mission assigned to your group!", 10):ToGroup(playerGroup)
+    end
+
+    PlayerRequests[playerName] = PlayerRequests[playerName] + 1
+    CoalitionReqCount[coalitionSide] = CoalitionReqCount[coalitionSide] + 1
+    table.insert(PlayerMissions[playerName], {type="ESCORT", id="ESCORT_"..playerName, label="Escort"})
+end
+function AddActiveMissionsMenu(playerGroup, rootMenu)
+    playerGroup.RootMenu = rootMenu -- Store for later use
+    MENU_GROUP_COMMAND:New(playerGroup, "Refresh Active Missions", rootMenu, function()
+        local playerName = playerGroup:GetName()
+        local missions = PlayerMissions[playerName] or {}
+
+        if playerGroup.ActiveMissionsMenu then
+            playerGroup.ActiveMissionsMenu:Remove()
+        end
+
+        local activeMenu = MENU_GROUP:New(playerGroup, "Active Missions", rootMenu)
+        playerGroup.ActiveMissionsMenu = activeMenu
+
+        if #missions == 0 then
+            MENU_GROUP_COMMAND:New(playerGroup, "No active missions", activeMenu, function() end)
+        else
+            for idx, mission in ipairs(missions) do
+                local label = string.format("[%d] %s (%s)", idx, mission.type, mission.label or mission.id or "")
+                local thisIdx = idx
+                MENU_GROUP_COMMAND:New(playerGroup, "Release " .. label, activeMenu, function()
+                    ReleasePlayerMissionByIndex(playerGroup, thisIdx)
+                end)
+            end
+        end
+    end)
+end
+
+function ReleasePlayerMissionByIndex(playerGroup, idx)
+    local playerName = playerGroup:GetName()
+    local coalitionSide = playerGroup:GetCoalition()
+    if not PlayerMissions[playerName] or not PlayerMissions[playerName][idx] then
+        MESSAGE:New("No such mission to release.", 10):ToGroup(playerGroup)
+        return
+    end
+
+    local mission = table.remove(PlayerMissions[playerName], idx)
+    PlayerRequests[playerName] = #PlayerMissions[playerName]
+    CoalitionReqCount[coalitionSide] = math.max(0, CoalitionReqCount[coalitionSide] - 1)
+
+    -- Optionally: Add logic to actually remove the mission from the Chief if needed
+
+    MESSAGE:New("Released mission: " .. (mission.label or mission.type), 10):ToGroup(playerGroup)
+end
+function AddDynamicNearestG2GMenus(playerGroup, G2GMenu)
+    local playerCoalition = playerGroup:GetCoalition()
+    local friendlyAirfields = (playerCoalition == coalition.side.BLUE) and blueAirfields or redAirfields
+    local enemyAirfields = (playerCoalition == coalition.side.BLUE) and redAirfields or blueAirfields
+
+    -- Helper to build sorted nearest list
+    local function getNearestAirfields(airfieldList, playerCoord)
+        local airfieldDistances = {}
+        for _, airfieldName in ipairs(airfieldList) do
+            local airbase = AIRBASE:FindByName(airfieldName)
+            if airbase then
+                local afCoord = airbase:GetCoordinate()
+                local dist = playerCoord:Get2DDistance(afCoord)
+                table.insert(airfieldDistances, {name = airfieldName, distance = dist})
+            end
+        end
+        table.sort(airfieldDistances, function(a, b) return a.distance < b.distance end)
+        return airfieldDistances
+    end
+
+    -- CAPTUREZONE missions (enemy airfields)
+    MENU_GROUP_COMMAND:New(playerGroup, "Update Nearest Enemy Airfields (Capture)", G2GMenu, function()
+        local playerCoord = playerGroup:GetCoordinate()
+        local nearestEnemy = getNearestAirfields(enemyAirfields, playerCoord)
+        local captureMenu = MENU_GROUP:New(playerGroup, "Capture Nearest Enemy Airfields", G2GMenu)
+        for i = 1, math.min(5, #nearestEnemy) do
+            local airfieldName = nearestEnemy[i].name
+            MENU_GROUP_COMMAND:New(playerGroup, "Capture " .. airfieldName, captureMenu, function()
+                local opsZone = OPSZONE:New(ZONE_AIRBASE:New(airfieldName, 5000)):SetDrawZone(true)
+                local speed = 80 -- knots for ground units
+                local altitude = 0 -- not used for ground
+                local formation = "Off Road"
+                local auftrag = AUFTRAG:NewCAPTUREZONE(opsZone, playerCoalition, speed, altitude, formation)
+                if playerCoalition == coalition.side.BLUE then
+                    BlueChief:AddMission(auftrag)
+                    MESSAGE:New("Blue CAPTUREZONE mission assigned at " .. airfieldName, 10):ToGroup(playerGroup)
+                else
+                    RedChief:AddMission(auftrag)
+                    MESSAGE:New("Red CAPTUREZONE mission assigned at " .. airfieldName, 10):ToGroup(playerGroup)
+                end
+            end)
+        end
+    end)
+
+    -- PATROLZONE missions (friendly airfields)
+    MENU_GROUP_COMMAND:New(playerGroup, "Update Nearest Friendly Airfields (Patrol)", G2GMenu, function()
+        local playerCoord = playerGroup:GetCoordinate()
+        local nearestFriendly = getNearestAirfields(friendlyAirfields, playerCoord)
+        local patrolMenu = MENU_GROUP:New(playerGroup, "Patrol Nearest Friendly Airfields", G2GMenu)
+        for i = 1, math.min(5, #nearestFriendly) do
+            local airfieldName = nearestFriendly[i].name
+            MENU_GROUP_COMMAND:New(playerGroup, "Patrol " .. airfieldName, patrolMenu, function()
+                local patrolZone = ZONE_AIRBASE:New(airfieldName, 5000)
+                local speed = 20 -- knots for ground units
+                local altitude = 0 -- not used for ground
+                local formation = "Off Road"
+                local auftrag = AUFTRAG:NewPATROLZONE(patrolZone, speed, altitude, formation)
+                if playerCoalition == coalition.side.BLUE then
+                    BlueChief:AddMission(auftrag)
+                    MESSAGE:New("Blue PATROLZONE mission assigned at " .. airfieldName, 10):ToGroup(playerGroup)
+                else
+                    RedChief:AddMission(auftrag)
+                    MESSAGE:New("Red PATROLZONE mission assigned at " .. airfieldName, 10):ToGroup(playerGroup)
+                end
+            end)
+        end
+    end)
+end
+function AddMenuForAllPlayers()
     local playerSet = SET_GROUP:New():FilterCategoryAirplane():FilterCategoryHelicopter():FilterStart()
     playerSet:ForEachGroup(function(group)
         if group:IsPlayer() then
             -- Root menu for player
             local rootMenu = MENU_GROUP:New(group, "Player Requests")
-            -- CAP submenu
-            local capMenu = MENU_GROUP:New(group, "CAP", rootMenu)
+            -- A2A submenu
+            local A2AMenu = MENU_GROUP:New(group, "A2A", rootMenu)
+            --A2G Submenu
+            local A2GMenu = MENU_GROUP:New(group, "A2G", rootMenu)
+            -- G2G submenu
+            local G2GMenu = MENU_GROUP:New(group, "G2G", rootMenu)
             -- Dynamic CAP zone over player
-            MENU_GROUP_COMMAND:New(group, "Request CAP (Over Me)", capMenu, function()
+            MENU_GROUP_COMMAND:New(group, "Request CAP (Over Me)", A2AMenu, function()
                 CreateCAPZoneOverPlayer(group)
             end)
-            -- Preset CAP zones
-            MENU_GROUP_COMMAND:New(group, "Request CAP (East)", capMenu, function()
-                CreateCAPZoneOverNamedZone(group, CapZone1, "East")
+            --add escort mission menu item
+            MENU_GROUP_COMMAND:New(group, "Request Escort (Escort Me)", A2AMenu, function()
+                RequestEscortMission(group)
             end)
-            MENU_GROUP_COMMAND:New(group, "Request CAP (Mid)", capMenu, function()
-                CreateCAPZoneOverNamedZone(group, CapZone3, "Mid")
+            -- Under A2A or A2G menu: 
+            MENU_GROUP_COMMAND:New(group, "Request CAS Enhanced (Over Me)", A2GMenu, function()
+                RequestCASEnhancedMission(group)
             end)
-            MENU_GROUP_COMMAND:New(group, "Request CAP (West)", capMenu, function()
-                CreateCAPZoneOverNamedZone(group, CapZone5, "West")
-            end)
-            -- Add Release CAP menu item
-            MENU_GROUP_COMMAND:New(group, "Release CAP", capMenu, function()
-                RemovePlayerCAP(group)
-            end)
+            AddDynamicNearestCASMenu(group, A2GMenu)
+            AddDynamicNearestCAPMenus(group, A2AMenu)
+            AddActiveMissionsMenu(group, rootMenu)
+            --ReleasePlayerMissionByIndex(group, rootMenu)
+            AddDynamicNearestG2GMenus(group, G2GMenu)
         end
     end)
 end
+
 ------------------------------
 -----ATC Ground Operations----
+-----Airbase Traffic management
 ------------------------------
+ATC_Controllers = {}
+
 function ATCGroundOps()
     local Freq = 118.00
-    
     for _, airbase in ipairs(world.getAirbases()) do
-    Freq = Freq+.50
-    ATC_AB = FLIGHTCONTROL:New(airbase:getName(),Freq,0,"C:\\Program Files\\DCS-SimpleRadio-Standalone",5002)
-    ATC_AB:SetParkingGuard(Group_Neutral_Inf):SetSpeedLimitTaxi(25):SetLimitTaxi(3, false, 1):SetLimitLanding(2, 99):SetMarkHoldingPattern(false)
-    ATC_AB:Start()  
-
-    env.info("ATC Ground Ops: " .. airbase:getName() .. " at frequency " .. Freq)
+        Freq = Freq + 0.50
+        local abName = airbase:getName()
+        local atc = FLIGHTCONTROL:New(abName, Freq, 0, "C:\\Program Files\\DCS-SimpleRadio-Standalone", 5002)
+        atc:SetParkingGuard(Group_Neutral_Inf)
+            :SetSpeedLimitTaxi(25)
+            :SetLimitTaxi(1, true, 1)
+            :SetLimitLanding(2, 0)
+            :SetMarkHoldingPattern(false)
+            :SetVerbosity(1)
+            :SetRunwayRepairtime(7200)
+        atc:Start()
+        ATC_Controllers[abName] = atc
+        env.info("ATC Ground Ops: " .. abName .. " at frequency " .. Freq)
     end
 end
+function RestartAllATCGroundOps()
+    for abName, atc in pairs(ATC_Controllers) do
+        if atc.Stop then atc:Stop() end
+        atc:Start()
+        env.info("Restarted ATC Ground Ops for: " .. abName)
+    end
+end
+
+function ForceStuckFlightsToReadyTaxiIfNoTaxiing()
+    local now = timer.getTime()
+    for abName, atc in pairs(ATC_Controllers) do
+        local taxiing = atc:GetFlights("TAXIOUT", nil, nil)
+        local taxiingCount = taxiing and #taxiing or 0
+
+        if taxiingCount == 0 then
+            local flights = atc:GetFlights("PARKING", nil, nil)
+            for _, flight in ipairs(flights or {}) do
+                if flight.Tparking and (now - flight.Tparking > 600) then -- 10 minutes
+                    if flight.Group and flight.Group:IsAlive() then
+                        atc:SetFlightStatus(flight, "READYTX")
+                        env.info(string.format("Force-taxi: %s at %s set to READYTX after %d seconds in PARKING", flight.Group:GetName(), abName, now - flight.Tparking))
+                    else
+                        env.info("Skipped force-taxi: flight group is nil or not alive")
+                    end
+                end
+            end
+        end
+    end
+end
+function DespawnStuckFlights()
+    local now = timer.getTime()
+    local foundStuck = false
+    for abName, atc in pairs(ATC_Controllers) do
+        local parkingFlights = atc:GetFlights("PARKING", nil, nil)
+        for _, flight in ipairs(parkingFlights or {}) do
+            if flight.Tparking and (now - flight.Tparking > 1200) then -- 20 minutes
+                if flight.Group and flight.Group:IsAlive() and not flight.Group:IsPlayer() then
+                    env.info(string.format("Despawning stuck flight (PARKING): %s at %s after %d seconds", flight.Group:GetName(), abName, now - flight.Tparking))
+                    flight.Group:Destroy(true)
+                    foundStuck = true
+                else
+                    env.info("Skipped despawn: flight group is nil, not alive, or is a player")
+                end
+            end
+        end
+        local taxiReturnFlights = atc:GetFlights("TAXIRETURN", nil, nil) or atc:GetFlights("TAXIIN", nil, nil)
+        for _, flight in ipairs(taxiReturnFlights or {}) do
+            local tTaxiReturn = flight.Ttaxireturn or flight.Ttaxiin
+            if tTaxiReturn and (now - tTaxiReturn > 300) then -- 5 minutes
+                if flight.Group and flight.Group:IsAlive() and not flight.Group:IsPlayer() then
+                    env.info(string.format("Despawning stuck flight (TAXIRETURN/TAXIIN): %s at %s after %d seconds", flight.Group:GetName(), abName, now - tTaxiReturn))
+                    flight.Group:Destroy(true)
+                    foundStuck = true
+                else
+                    env.info("Skipped despawn: flight group is nil, not alive, or is a player")
+                end
+            end
+        end
+    end
+    if foundStuck then
+        env.info("Stuck flights found and cleaned up, rechecking in 30 seconds.")
+        TIMER:New(DespawnStuckFlights):Start(30)
+    end
+end
+
+
+--TIMER:New(DespawnStuckFlights):Start(300, 300) -- Regular check every 5 minutes
+--TIMER:New(ForceStuckFlightsToReadyTaxiIfNoTaxiing):Start(60*5, 60*5) -- Check every 5 minutes
+
+
+
 
 ---------------
 ---------------
 
 
 -- Schedule menu creation at mission start or after a delay
-SCHEDULER:New(nil, AddPresetCAPZoneMenuForAllPlayers, {}, 12,30)
+SCHEDULER:New(nil, AddMenuForAllPlayers, {}, 12,30)
 --SCHEDULER:New(nil, RedTaskManagerA2G:SetMenuName("SnakeEyes"),{},12,30)
 --SCHEDULER:New(nil, BlueTaskManagerA2G:SetMenuName("Ghost Bat"),{},12,30)
 
 ATCGroundOps()
 
-----------------------------------------
-----------------------------------------
------End Player Cap flight requests-----
-----------------------------------------
-----------------------------------------
 ---Blue---
 --local CapZone1 = ZONE:FindByName("CAP_Zone_E")
 --local CapZone2 = ZONE:FindByName("CAP_Zone_SE")
@@ -2603,6 +3062,7 @@ ATCGroundOps()
 -----------------------------
 -----------------------------
 
+
 --Change Log for **WoC - Sinai 6.3**
 --
 --```
@@ -2611,8 +3071,11 @@ ATCGroundOps()
 --AI Base Capture mission created, When an airfield has less then 5 ground units, the AI commander will be issued with a ground assault mission escorted by Helos. they should launch from the nearest friendly airbase.
 --Note: These forces could be intercepted and may need player protection.
 --
+--max missions per player is 6
+--max missions per coalition is 20
 --Removed Artillery units from the Ground Brigades 
---
+
+----Change Log for **WoC - Sinai 6.4**
 --Implemented ATC Ground control you can Access Airbase info and request taxi\takeoff through F10 
 --you must request taxi to remove the taxi guard.
 --
@@ -2620,10 +3083,25 @@ ATCGroundOps()
 --
 --Added additional Cap Zones for Blue and Red Airwings
 --
---Added player menu to request CAP zones over their position or preset zones.
---
+--Added player menu to request CAP zones over their position or the nearest friendly and enemy airbases.
+--Added player menu to request CAS Enhanced missions over their position or the nearest friendly and enemy airbases.
+--Added player menu to request Escort missions for their group.
+--Added player menu to view and release active missions.
+--Added player menu to request G2G missions to the nearest friendly and enemy airbases.
+
+--updated ground unit mission sets.
+--GCI Cap staging zones now drawn on the map for both sides.
 --Fixed a bug with Red AWACS not spawning correctly. updated the Datalink awacs to be immortal,invis and infinite fuel.
+--added an additional check to the base capture logic to stop multiple missions being sent to the same base at the same time.
 --
 --noticed very few if any ground units being deployed Fixed mission list for Brigades 
+--Fixed spawn logic for Defending units, they now spawn near the warehouse and not all over the airbase
+--fixed a bug with "no player missions found" appearing continuously.
+--
 --increase mission limit for ground attack to 6
+--tuning the ATC Ground ops is still ongoing, aircraft can still get stuck on the ground, but this should be less frequent.
+--added in mission restart every 8 hours with warning message to players.
+--made progress on unit persistence but not yet implemented.
+
+
 --```
