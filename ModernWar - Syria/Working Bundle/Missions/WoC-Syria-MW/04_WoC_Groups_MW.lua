@@ -1,5 +1,4 @@
 
-
 Group_Blue_SAM_Site = "Hawk_Site"
 Group_Blue_Mech = "Blue_Mech_Bradley_Template"
 Group_Blue_APC = "Blue_APC_MRAP_Template"

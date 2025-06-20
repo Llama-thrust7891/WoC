@@ -2243,7 +2243,7 @@ Blueawacs:SetModernEraAggressive()
 -- And start
 Blueawacs:__Start(5)
 
-local Redawacs = AWACS:New("Magic",RedAwacsAirwing,"red",AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_W",ZONE:FindByName("Bulls"),"CAP_Zone_E",245,radio.modulation.AM )
+local Redawacs = AWACS:New("Magic",RedAwacsAirwing,"red",AIRBASE:FindByName(RedAwacsAirfieldName),"CAP_Zone_W",ZONE:FindByName("Bulls"),"CAP_Zone_W",245,radio.modulation.AM )
 -- set one escort group; this example has two units in the template group, so they can fly a nice formation.
 Redawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
 -- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
