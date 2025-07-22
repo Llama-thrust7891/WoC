@@ -11,6 +11,5 @@ dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/04_WoC_Groups_MW.lua")
 dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/05_WoC_Main.lua")
 SaveFolder = "\\Missions\\WoC-Syria-MW\\Save\\"
 
-
 -----Coldwar units table-----
 --BlueSamGroupName = Group_USA_Hawk

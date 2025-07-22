@@ -171,7 +171,7 @@ ScheduleMissionRestart()
 TIMER:New(saveAirfields):Start(130, 120) -- every 120 seconds after 130 seconds
 --Start the main script for setting up the Wings of Conflict Mission--
 
-SamCount = 1
+Count = 1
 MinDistance = 300
 MaxDistance = 1000
 --Coalition = "USA" --commented out only needed for testing
@@ -265,7 +265,7 @@ function Spawn_Near_airbase(GroupTemplate, airfieldName, Inner, Outer, Patrol)
     end
 
     -- Generate unique name
-    local GroupName = airfieldName.."_"..GroupTemplate.."_"..SamCount
+    local GroupName = airfieldName.."_"..GroupTemplate.."_"..Count
     local Airbase = AIRBASE:FindByName(airfieldName)
     local Spawnpoint = nil
     
@@ -313,7 +313,7 @@ function Spawn_Near_airbase(GroupTemplate, airfieldName, Inner, Outer, Patrol)
     Group_Spawn:Spawn()
     
     -- Increment counter
-    SamCount = SamCount + 1
+    Count = Count + 1
 end
 
 OPS_Zones = SET_OPSZONE:New()
@@ -540,6 +540,11 @@ function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance
         -- Helper to spawn a group near the warehouse or fallback zone
 -- Helper to spawn a group near the warehouse or fallback zone
     local function SpawnGroupNearZone(GroupTemplate, Patrol, repeatCount)
+        for i = 1, repeatCount do
+        Count = Count + 1
+        local GroupName = airfieldName .. "_" .. GroupTemplate .. "_" .. Count
+        env.info("Spawning " .. GroupTemplate .. " with name " .. GroupName .. " (Attempt " .. i .. ")")
+
         Patrol = Patrol ~= false -- Default to true if not explicitly set to false
         repeatCount = repeatCount or 4 -- Default to 4 spawns if not specified
         local maxAttempts = 5
@@ -551,7 +556,7 @@ function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance
                 return
             end
 
-            local GroupName = airfieldName.."_"..GroupTemplate.."_"..SamCount
+            local GroupName = airfieldName.."_"..GroupTemplate.."_"..Count
             local Spawnpoint = nil
 
             if WarehouseZone then
@@ -573,7 +578,7 @@ function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance
                     if Patrol then
                         env.info("no mission assigned")
                     end
-                    SamCount = SamCount + 1
+                    Count = Count + 1
                 end
             end)
             Group_Spawn:Spawn()
@@ -582,6 +587,7 @@ function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance
         for i = 1, repeatCount do
             trySpawn(1)
         end
+    end
     end
 
         -- Spawn groups (SAM site only if enough parking)
@@ -597,9 +603,9 @@ function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance
             SpawnGroupNearZone(chosenTemplate, false, 1)
         end
 
-        SpawnGroupNearZone(Group_Blue_Mech, true, 3)
+        SpawnGroupNearZone(Group_Blue_Mech, true, 2)
         SpawnGroupNearZone(Group_Blue_APC, true, 2 )
-        SpawnGroupNearZone(Group_Blue_Armoured,false, 3 )
+        SpawnGroupNearZone(Group_Blue_Armoured,false, 2 )
         --SpawnGroupNearZone(Group_Blue_Inf,false,4)
         SpawnGroupNearZone(Group_Blue_Truck,false,2)
 
@@ -647,6 +653,10 @@ function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance,
         -- Helper to spawn a group near the warehouse or fallback zone
 -- Helper to spawn a group near the warehouse or fallback zone
     local function SpawnGroupNearZone(GroupTemplate, Patrol, repeatCount)
+        for i = 1, repeatCount do
+        Count = Count + 1
+        local GroupName = airfieldName .. "_" .. GroupTemplate .. "_" .. Count
+        env.info("Spawning " .. GroupTemplate .. " with name " .. GroupName .. " (Attempt " .. i .. ")")
         Patrol = Patrol ~= false -- Default to true if not explicitly set to false
         repeatCount = repeatCount or 4 -- Default to 4 spawns if not specified
         local maxAttempts = 5
@@ -658,7 +668,7 @@ function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance,
                 return
             end
 
-            local GroupName = airfieldName.."_"..GroupTemplate.."_"..SamCount
+            local GroupName = airfieldName.."_"..GroupTemplate.."_"..Count
             local Spawnpoint = nil
 
             if WarehouseZone then
@@ -680,7 +690,7 @@ function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance,
                     if Patrol then
                         env.info("no mission assigned")
                     end
-                    SamCount = SamCount + 1
+                    Count = Count + 1
                 end
             end)
             Group_Spawn:Spawn()
@@ -688,6 +698,7 @@ function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance,
 
         for i = 1, repeatCount do
             trySpawn(1)
+        end
         end
     end
 
@@ -703,9 +714,9 @@ function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance,
             local chosenTemplate = redSAMTemplates[randomIndex]
             SpawnGroupNearZone(chosenTemplate, true, 1)
         end
-        SpawnGroupNearZone(Group_Red_Mech, true,3)
-        SpawnGroupNearZone(Group_Red_APC, true, 3)
-        SpawnGroupNearZone(Group_Red_Armoured,false, 3)
+        SpawnGroupNearZone(Group_Red_Mech, true,2)
+        SpawnGroupNearZone(Group_Red_APC, true, 2)
+        SpawnGroupNearZone(Group_Red_Armoured,false, 2)
         --SpawnGroupNearZone(Group_Red_Inf)
         SpawnGroupNearZone(Group_Red_Truck,false ,2)
 
@@ -1164,7 +1175,7 @@ end
 local CapZone1 = ZONE:FindByName("CAP_Zone_NE-1")
 local CapZone2 = ZONE:FindByName("CAP_Zone_NE-2")
 local CapZone3 = ZONE:FindByName("CAP_Zone_NE-3")
-local CapZone4 = ZONE:FindByName("CAP_Zone_NW-1")
+local CapZone4 = ZONE:FindByName("CAP_Zone_NW-1"):DrawZone(2,{1,0,0},1,{1,0,0},.15,4) 
 local CapZone5 = ZONE:FindByName("CAP_Zone_NW-2")
 local CapZone6 = ZONE:FindByName("CAP_Zone_NW-3")
 local CapZone7 = ZONE:FindByName("CAP_Zone_NW-4")
@@ -1172,7 +1183,7 @@ local CapZone8 = ZONE:FindByName("CAP_Zone_SE-1")
 local CapZone9 = ZONE:FindByName("CAP_Zone_SE-2")
 local CapZone10 = ZONE:FindByName("CAP_Zone_SE-3")
 local CapZone11 = ZONE:FindByName("CAP_Zone_SE-4")
-local CapZone12 = ZONE:FindByName("CAP_Zone_SW-1")
+local CapZone12 = ZONE:FindByName("CAP_Zone_SW-1"):DrawZone(2,{0,0,1},1,{0,0,1},.15,4) 
 local CapZone13 = ZONE:FindByName("CAP_Zone_SW-2")
 local CapZone14 = ZONE:FindByName("CAP_Zone_SW-3")
 
@@ -1373,6 +1384,8 @@ env.info("Ops Zones Started")
 
 --Function to combine the above functions into deploying Red and blue gaurds and warehouses around airbases. 
 function DeployForces()
+    env.info("DeployForces: Function called")
+
     for _, airfieldName in ipairs(blueAirfields) do
         if airfieldName then
             env.info("Processing airfield: " .. airfieldName) -- Debugging
@@ -2385,46 +2398,50 @@ end
 --------------------
 -------AI GCI--------
 --------------------
--- Set up AWACS called "AWACS North". It will use the AwacsAW Airwing set up above and be of the "blue" coalition. Homebase is Kutaisi.
--- The AWACS Orbit Zone is a round zone set in the mission editor named "Awacs Orbit", the FEZ is a Polygon-Zone called "Rock" we have also
--- set up in the mission editor with a late activated helo named "Rock#ZONE_POLYGON". Note this also sets the BullsEye to be referenced as "Rock".
--- The CAP station zone is called "Fremont". We will be on 255 AM.
-local Blueawacs = AWACS:New("Darkstar",BlueAwacsAirwing,"blue"    ,AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_SW-1",ZONE:FindByName("Bulls"),"CAP_Zone_SW-1",255,radio.modulation.AM )
-Blueawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
--- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
-Blueawacs:SetAwacsDetails(CALLSIGN.AWACS.Darkstar,1,30,300,88,25)
--- Set up SRS on port 5002 - change the below to your path and port
-Blueawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","Male","en-US",5002)
--- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
---Blueawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
--- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
---Blueawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
--- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
-Blueawacs:SetModernEraAggressive()
 
--- And start
-Blueawacs:__Start(5)
+function GCI()
+    -- Set up AWACS called "AWACS North". It will use the AwacsAW Airwing set up above and be of the "blue" coalition. Homebase is Kutaisi.
+    -- The AWACS Orbit Zone is a round zone set in the mission editor named "Awacs Orbit", the FEZ is a Polygon-Zone called "Rock" we have also
+    -- set up in the mission editor with a late activated helo named "Rock#ZONE_POLYGON". Note this also sets the BullsEye to be referenced as "Rock".
+    -- The CAP station zone is called "Fremont". We will be on 255 AM.
+    local Blueawacs = AWACS:New("Darkstar",BlueAwacsAirwing,"blue"    ,AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_SW-1",ZONE:FindByName("Bulls"),"CAP_Zone_SW-1",255,radio.modulation.AM )
+    Blueawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+    -- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
+    Blueawacs:SetAwacsDetails(CALLSIGN.AWACS.Darkstar,1,30,300,88,25)
+    -- Set up SRS on port 5002 - change the below to your path and port
+    Blueawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","Male","en-US",5002)
+    -- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
+    --Blueawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
+    -- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
+    --Blueawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
+    -- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
+    Blueawacs:SetModernEraAggressive()
 
-local Redawacs = AWACS:New("Magic",RedAwacsAirwing,"red",AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_NW-1",ZONE:FindByName("Bulls"),"CAP_Zone_NW-1",245,radio.modulation.AM )
--- set one escort group; this example has two units in the template group, so they can fly a nice formation.
-Redawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
--- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
-Redawacs:SetAwacsDetails(CALLSIGN.AWACS.Magic,1,30,300,88,25)
--- Set up SRS on port 5002 - change the below to your path and port
-Redawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","Male","en-US",5002)
--- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
---Redawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
--- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
---Redawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
--- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
-Redawacs:SetModernEraAggressive()
--- And start
-Redawacs:__Start(5)
+    -- And start
+    Blueawacs:__Start(5)
+
+    local Redawacs = AWACS:New("Magic",RedAwacsAirwing,"red",AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_NW-1",ZONE:FindByName("Bulls"),"CAP_Zone_NW-1",245,radio.modulation.AM )
+    -- set one escort group; this example has two units in the template group, so they can fly a nice formation.
+    Redawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+    -- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
+    Redawacs:SetAwacsDetails(CALLSIGN.AWACS.Magic,1,30,300,88,25)
+    -- Set up SRS on port 5002 - change the below to your path and port
+    Redawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","Male","en-US",5002)
+    -- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
+    --Redawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
+    -- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
+    --Redawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
+    -- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
+    Redawacs:SetModernEraAggressive()
+    -- And start
+    Redawacs:__Start(5)
+end
 ---------------------
 ---------------------
 --End AI GCI-----
 ---------------------
 ---------------------
+TIMER:New(GCI):Start(15)
 TIMER:New(PlayerTaskingBlue):Start(20)
 TIMER:New(PlayerTaskingRed):Start(21)
 
@@ -3238,7 +3255,7 @@ end
 SCHEDULER:New(nil, AddMenuForAllPlayers, {}, 12,30)
 
 
-ATCGroundOps()
+--ATCGroundOps()
 
 
 
@@ -3318,49 +3335,8 @@ ATCGroundOps()
 -----------------------------
 
 
---Change Log for **WoC - Sinai 6.3**
---
---```
---AI commanders Maximum missions reduced from 100 to 20 (30 missions were seen active at a time from the last play through) This should reduce AI Air threat.
---
---AI Base Capture mission created, When an airfield has less then 5 ground units, the AI commander will be issued with a ground assault mission escorted by Helos. they should launch from the nearest friendly airbase.
---Note: These forces could be intercepted and may need player protection.
---
---max missions per player is 6
---max missions per coalition is 20
---Removed Artillery units from the Ground Brigades 
---```
---Change Log for **WoC - Sinai 6.4**
---
---Airbase capture persistence is now working captured airfields will be remembered but defending units \squadrons will be refreshed every 8 hours.
---Implemented ATC Ground control you can Access Airbase info and request taxi\takeoff through F10 
---you must request taxi to remove the taxi guard.
---
---Updated mission briefing
---
---Added additional Cap Zones for Blue and Red Airwings
---
---Added player menu to request CAP zones over their position or the nearest friendly and enemy airbases.
---Added player menu to request CAS Enhanced missions over their position or the nearest friendly and enemy airbases.
---Added player menu to request Escort missions for their group.
---Added player menu to view and release active missions.
---Added player menu to request G2G missions to the nearest friendly and enemy airbases.
---updated ground unit mission sets.
---GCI Cap staging zones now drawn on the map for both sides.
---Fixed a bug with Red AWACS not spawning correctly. updated the Datalink awacs to be immortal,invis and infinite fuel.
---added an additional check to the base capture logic to stop multiple missions being sent to the same base at the same time.
---
---noticed very few if any ground units being deployed Fixed mission list for Brigades 
---Fixed spawn logic for Defending units, they now spawn near the warehouse and not all over the airbase
---fixed a bug with "no player missions found" appearing continuously.
---
---increase mission limit for ground attack to 6
---tuning the ATC Ground ops is still ongoing, aircraft can still get stuck on the ground, but this should be less frequent.
---added in mission restart every 8 hours with warning message to players.
---made progress on unit persistence but not yet implemented.
---
---```
---```
-----Change Log for **WoC - Sinai 6.4**
---TODO LIST.
---Update player requests to spawn in groupd, take control as flight group then issue the auftrag to the flight group.
+--Change Log for **WoC - Syria 6.5**
+-- starting with the Sinai 6.5 code base adjusted for new zones and to split airfields north \south
+--includes ATC Ground OPS, GCI Awacs, AI Chiefs, and player request menus
+-- airbase persistance enabled.
+-- 2024-01-01: Initial release of WoC - Syria 6.5
