@@ -366,6 +366,22 @@ function AssignPatrolMission(GroupName, airfieldName)
     
     env.info("Assigned Patrol Mission to " .. group:GetName() .. " in zone: " .. airfieldName)
 end
+
+----- Configure Airbase Warehouse assets.
+function ClearAllAirbaseInventories()
+    for _, airbase in ipairs(Airbases) do
+        local inventory = airbase:GetInventory()
+        for _, category in ipairs({"weapons", "fuel", "parts"}) do
+            if inventory[category] then
+                for item, _ in pairs(inventory[category]) do
+                    inventory[category][item] = 0
+                end
+            end
+        end
+    end
+end
+
+
 ---spawning function for later use
 function Spawn_Near_airbase(GroupTemplate, airfieldName, Inner, Outer, Patrol)
     Patrol = Patrol ~= false -- Default to true if not explicitly set to false
