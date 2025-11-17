@@ -7,6 +7,7 @@
 dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/Moose.lua")
 dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/mist_4_5_126.lua")
 dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/02_WoC_Settings.lua")
+dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/03_WoC_Zones.lua")
 dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/04_WoC_Groups_MW.lua")
 dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/05_WoC_Functions.lua")
 dofile(lfs.writedir() .. "Missions/WoC-Syria-MW/06_WoC_Mission.lua")
