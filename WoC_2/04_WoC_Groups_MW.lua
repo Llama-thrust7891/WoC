@@ -1,6 +1,7 @@
 
 
-Group_Blue_SAM_Site = "Hawk_Site"
+--Group_Blue_SAM_Site = "Hawk_Site"
+Group_Blue_SAM_Site = "Patriot_Site"
 Group_Blue_Mech = "Blue_Mech_Bradley_Template"
 Group_Blue_APC = "Blue_APC_MRAP_Template"
 Group_Blue_Armoured = "Blue_Armoured_Abrams_Template"
@@ -77,7 +78,7 @@ Red_Attack ={Red_Attack1,Red_Attack2,Red_Attack3}
 Red_Helos ={Red_Helo1,Red_Helo2,Red_Helo3}
 Red_AttackHelos ={Red_AttackHelo1,Red_AttackHelo2,Red_AttackHelo3}
 
-local FighterTemplates = {
+FighterTemplates = {
     blue = {
         {
             template = Blue_Fighters, -- table of template names
@@ -202,20 +203,20 @@ local FighterTemplates = {
 
 
 -- Brigade / Platoon configuration tables
-local BrigadeTemplates = {
+BrigadeTemplates = {
     blue = {
-        { key="apc",      template = Group_Blue_APC,      count = 5, name = "Motorised Platoon", missions = APC_MissionSet,   priority = 60, attribute = GROUP.Attribute.GROUND_APC },
-        { key="mech",     template = Group_Blue_Mech,     count = 5, name = "Mechanised Platoon", missions = IFV_MissionSet,   priority = 70, attribute = GROUP.Attribute.GROUND_APC, weaponRange = {0.5, 20} },
-        { key="armour",   template = Group_Blue_Armoured, count = 5, name = "Armoured Platoon",   missions = MBT_MissionSet,   priority = 80 },
-        { key="logi",     template = Group_Blue_Truck,    count = 5, name = "Logistics Platoon",  missions = {AUFTRAG.Type.AMMOSUPPLY}, priority = 70 },
-        { key="sam",      template = Group_Blue_SAM,      count = 5, name = "SAM Platoon",        missions = {AUFTRAG.Type.AIRDEFENSE}, priority = 100 },
+        { key="apc",      template = Group_Blue_APC,      count = 5, name = "Motorised Platoon", missions = {AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD},   priority = 60, attribute = GROUP.Attribute.GROUND_APC },
+        { key="mech",     template = Group_Blue_Mech,     count = 5, name = "Mechanised Platoon", missions = {AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD},   priority = 70, attribute = GROUP.Attribute.GROUND_APC, weaponRange = {0.5, 20} },
+        { key="armour",   template = Group_Blue_Armoured, count = 5, name = "Armoured Platoon",   missions = {AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD},   priority = 80 },
+        { key="logi",     template = Group_Blue_Truck,    count = 5, name = "Logistics Platoon",  missions = {AUFTRAG.Type.AMMOSUPPLY,AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT}, priority = 70 },
+        { key="sam",      template = {Group_Blue_SAM1, Group_Blue_SAM2, Group_Blue_SAM3, Group_Blue_SAM4},      count = 5, name = "SAM Platoon",        missions = {AUFTRAG.Type.AIRDEFENSE}, priority = 100 },
         -- arty / inf entries can be added/disabled here
     },
     red = {
-        { key="apc",      template = Group_Red_APC,      count = 5, name = "Motorised Platoon", missions = APC_MissionSet,   priority = 60, attribute = GROUP.Attribute.GROUND_APC },
-        { key="mech",     template = Group_Red_Mech,     count = 5, name = "Mechanised Platoon", missions = IFV_MissionSet,   priority = 70, attribute = GROUP.Attribute.GROUND_APC, weaponRange = {0.5, 20} },
-        { key="armour",   template = Group_Red_Armoured, count = 5, name = "Armoured Platoon",   missions = MBT_MissionSet,   priority = 80 },
-        { key="logi",     template = Group_Red_Truck,    count = 5, name = "Logistics Platoon",  missions = {AUFTRAG.Type.AMMOSUPPLY}, priority = 70 },
-        { key="sam",      template = Group_Red_SAM,      count = 5, name = "SAM Platoon",        missions = {AUFTRAG.Type.AIRDEFENSE}, priority = 100 },
+        { key="apc",      template = Group_Red_APC,      count = 5, name = "Motorised Platoon", missions = {AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD},   priority = 60, attribute = GROUP.Attribute.GROUND_APC },
+        { key="mech",     template = Group_Red_Mech,     count = 5, name = "Mechanised Platoon", missions = {AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD},   priority = 70, attribute = GROUP.Attribute.GROUND_APC, weaponRange = {0.5, 20} },
+        { key="armour",   template = Group_Red_Armoured, count = 5, name = "Armoured Platoon",   missions = {AUFTRAG.Type.PATROLZONE,AUFTRAG.Type.ARMOUREDGUARD, AUFTRAG.Type.ONGUARD},   priority = 80 },
+        { key="logi",     template = Group_Red_Truck,    count = 5, name = "Logistics Platoon",  missions = {AUFTRAG.Type.AMMOSUPPLY,AUFTRAG.Type.TROOPTRANSPORT,AUFTRAG.Type.CARGOTRANSPORT}, priority = 70 },
+        { key="sam",      template = {Group_Red_SAM1, Group_Red_SAM2, Group_Red_SAM3, Group_Red_SAM4},      count = 5, name = "SAM Platoon",        missions = {AUFTRAG.Type.AIRDEFENSE}, priority = 100 },
     }
 }

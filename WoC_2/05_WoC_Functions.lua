@@ -102,6 +102,7 @@ end
 -----End Mission Restart schedule
 ------------------------------------------------------
 ------------------------------------------------------
+
 function SelectRandomTemplate(templateList)
     if not templateList or #templateList == 0 then
         env.info("SelectRandomTemplate: empty template list")
@@ -111,7 +112,36 @@ function SelectRandomTemplate(templateList)
     return templateList[randomIndex]
 end
 --- Get all airbase names that are airdromes, excluding those named "H" add to list "AairfieldNames"
-
+local function SpawnTemplateExists(prefix)
+    if not prefix or prefix == "" then return false end
+    -- exact group match
+    if GROUP:FindByName(prefix) then return true end
+    -- search all groups for prefix substring
+    local ok, groups = pcall(function() return world.getAllGroups() end)
+    if not ok or not groups then return false end
+    for _, g in ipairs(groups) do
+        local okn, name = pcall(function() return g:getName() end)
+        if okn and name and type(name) == "string" then
+            if name:find(prefix, 1, true) then
+                return true
+            end
+        end
+    end
+    return false
+end
+local function ValidateGroupGlobals()
+    for k, v in pairs(_G) do
+        if type(k) == "string" and k:match("^Group_") then
+            if type(v) ~= "string" then
+                env.info("ValidateGroupGlobals: " .. k .. " is not a string (value type: " .. type(v) .. ")")
+            else
+                if not SpawnTemplateExists(v) then
+                    env.info("ValidateGroupGlobals: TEMPLATE NOT FOUND in mission -> " .. k .. " = '" .. tostring(v) .. "'")
+                end
+            end
+        end
+    end
+end
 function getAllAirbaseNames()
     local airfields = {}
     for _, airbase in ipairs(world.getAirbases()) do
@@ -131,7 +161,7 @@ AirfieldNames = getAllAirbaseNames()
 blueAirfields = blueAirfields or {}
 redAirfields = redAirfields or {}
 referenceAirfield = referenceAirfield or nil
-
+ValidateGroupGlobals()
 -----------------SortredAirfield-----------------------
 
 --Sort airfields into red and blue
@@ -217,7 +247,21 @@ local function airbaseParkingSummary(airfieldName)
         aircraftParkingCount = aircraftParkingCount
     }
 end
-
+local function NormalizeSide(side)
+    if not side then return nil end
+    if type(side) == "number" then
+        if side == country.id.RUSSIA then return "red" end
+        if side == country.id.USA then return "blue" end
+        local ok, coal = pcall(function() return country.getCoalition(side) end)
+        if ok and coal == coalition.side.RED then return "red" end
+        if ok and coal == coalition.side.BLUE then return "blue" end
+        return nil
+    end
+    local s = string.lower(tostring(side))
+    if s:find("russia") or s:find("rus") or s:find("red") then return "red" end
+    if s:find("usa") or s:find("us") or s:find("blue") then return "blue" end
+    return nil
+end
 ----create a zone object and opszone object around an airfield
 function CreateAirfieldOpszones(airfieldName)
     local zoneName = "Capture Zone - " .. airfieldName
@@ -359,28 +403,56 @@ end
 -- Spawn warehouses and attempt to use blue/red lists to choose side.
 -- Supply numeric IDs for blueSide and redSide (adjust to your mission country IDs).
 function SpawnWarehousesByFaction(blueSide, redSide, defaultSide)
-    blueSide     = "USA"     or 1
-    redSide      = "RUSSIA"      or 2
-    defaultSide  = defaultSide  or 0
-    
+    -- sensible defaults (strings accepted; SpawnWarehouse handles country conversion)
+    blueSide     = blueSide or "USA"
+    redSide      = redSide or "RUSSIA"
+    defaultSide  = defaultSide or 0
+
+    -- table to store metadata for later retrieval: WarehousesByAirfield[airfieldName] = { name, x, y, side }
+    WarehousesByAirfield = WarehousesByAirfield or {}
 
     -- Ensure saved lists exist / are loaded
     if not (blueAirfields and redAirfields) then
         env.info("SpawnWarehousesByFaction: blueAirfields/redAirfields nil - call loadAirfields() before spawning")
-        return
+        return WarehousesByAirfield
     end
 
     -- Spawn on blue list
     for _, airfieldName in ipairs(blueAirfields or {}) do
         local warehouseName = "Warehouse - " .. airfieldName
         SpawnWarehouse(airfieldName, warehouseName, blueSide)
+
+        -- attempt to capture static info (position) for later use
+        local ok, staticObj = pcall(function() return STATIC:FindByName(warehouseName) end)
+        local x, y = nil, nil
+        if ok and staticObj then
+            local ok2, vec = pcall(function() return staticObj:GetVec2() end)
+            if ok2 and vec and vec.x then
+                x, y = vec.x, vec.y
+            end
+        end
+
+        WarehousesByAirfield[airfieldName] = { name = warehouseName, x = x, y = y, side = blueSide }
     end
 
     -- Spawn on red list
     for _, airfieldName in ipairs(redAirfields or {}) do
         local warehouseName = "Warehouse - " .. airfieldName
         SpawnWarehouse(airfieldName, warehouseName, redSide)
+
+        local ok, staticObj = pcall(function() return STATIC:FindByName(warehouseName) end)
+        local x, y = nil, nil
+        if ok and staticObj then
+            local ok2, vec = pcall(function() return staticObj:GetVec2() end)
+            if ok2 and vec and vec.x then
+                x, y = vec.x, vec.y
+            end
+        end
+
+        WarehousesByAirfield[airfieldName] = { name = warehouseName, x = x, y = y, side = redSide }
     end
+
+    return WarehousesByAirfield
 end
 
 
@@ -503,6 +575,26 @@ function SpawnAirfieldGuards(coalitionSide)
                     local GroupName = samTemplate .. "_SAMSite_" .. airfieldName .. "_" .. i
                     SpawnGroupAtPoint(samTemplate, GroupName, airfieldZone, 500, 1000, land.SurfaceType.LAND)
                 end
+
+                -- Check parking spots before deploying main SAM site
+                local parkingData = airbaseParkingSummary(airfieldName)
+                if parkingData and parkingData.aircraftParkingCount > 80 then
+                    local siteTemplate, siteGroupName
+                    if coalitionSide == "blue" then
+                        siteTemplate = Group_Blue_SAM_Site
+                        siteGroupName = siteTemplate .. "_MainSite_" .. airfieldName
+                    elseif coalitionSide == "red" then
+                        siteTemplate = Group_Red_SAM_Site
+                        siteGroupName = siteTemplate .. "_MainSite_" .. airfieldName
+                    end
+                    if siteTemplate then
+                        SpawnGroupAtPoint(siteTemplate, siteGroupName, airfieldZone, 500, 1000, land.SurfaceType.LAND)
+                        env.info("SpawnAirfieldGuards: Main SAM site spawned for " .. airfieldName)
+                    end
+                else
+                    env.info("SpawnAirfieldGuards: Not enough parking spots for main SAM site at " .. airfieldName)
+                end
+
             else
                 env.info("SpawnAirfieldGuards: failed to get airbase Vec2 for " .. tostring(airfieldName))
             end
@@ -559,11 +651,13 @@ function DefineChief(coalitionSide)
     if string.lower(coalitionSide or "") == "blue" then
     BlueChief = CHIEF:New(coalition.side.BLUE, BlueAgents)
     BlueAgents = SET_GROUP:New():FilterCoalitions("blue"):FilterStart()
+    BlueChief:Start()
     BlueChief:SetVerbosity(ChiefVerbosity)
     elseif string.lower(coalitionSide or "") == "red" then
     RedChief = CHIEF:New(coalition.side.RED, RedAgents)
     RedAgents = SET_GROUP:New():FilterCoalitions("red"):FilterStart()
     RedChief:SetVerbosity(ChiefVerbosity)
+    RedChief:Start()
     Intel = RedIntel
     else
          env.info("DefineChief: Invalid coalitionSide - " .. tostring(coalitionSide))
@@ -644,27 +738,27 @@ if string.lower(coalitionSide or "") == "blue" then
     BlueChief:SetBorderZones(blueAirfieldszoneset)
     BlueChief:SetConflictZones(redAirfieldszoneset)
     
-    BlueChief:AddCapZone(CapZone1,26000,400,180,25)
-    BlueChief:AddCapZone(CapZone2,26000,400,180,25)
-    BlueChief:AddCapZone(CapZone3,26000,400,180,25)
-    BlueChief:AddBorderZone(CapZone1)
-    BlueChief:AddBorderZone(CapZone2)
-    BlueChief:AddBorderZone(CapZone3)
-    BlueChief:AddConflictZone(CapZone4)
-    BlueChief:AddConflictZone(CapZone5)
+    BlueChief:AddCapZone(CapZone8,26000,400,180,25)
+    BlueChief:AddCapZone(CapZone9,26000,400,180,25)
+    BlueChief:AddCapZone(CapZone10,26000,400,180,25)
+    BlueChief:AddCapZone(CapZone13,26000,400,180,25)
+    BlueChief:AddCapZone(CapZone15,26000,400,180,25)
+    BlueChief:SetBorderZones(BlueBorderSet)
+    BlueChief:SetConflictZones(RedBorderSet)
+
 
  elseif string.lower(coalitionSide or "") == "red" then
     RedChief:SetBorderZones(redAirfieldszoneset)
     RedChief:SetConflictZones(blueAirfieldszoneset)
     
-    RedChief:AddCapZone(CapZone1,26000,400,180,25)
     RedChief:AddCapZone(CapZone2,26000,400,180,25)
     RedChief:AddCapZone(CapZone3,26000,400,180,25)
-    RedChief:AddBorderZone(CapZone1)
-    RedChief:AddBorderZone(CapZone2)
-    RedChief:AddBorderZone(CapZone3)
-    RedChief:AddConflictZone(CapZone4)
-    RedChief:AddConflictZone(CapZone5)
+    RedChief:AddCapZone(CapZone4,26000,400,180,25)
+    RedChief:AddCapZone(CapZone6,26000,400,180,25)
+    RedChief:AddCapZone(CapZone7,26000,400,180,25)
+    
+    BlueChief:SetBorderZones(RedBorderSet)
+    BlueChief:SetConflictZones(BlueBorderSet)
 
  else
   env.info("ChiefZones: Invalid coalitionSide - " .. tostring(coalitionSide))
@@ -731,7 +825,38 @@ end
 ----------End Chief Section--------------
 -----------------------------------------
 
+----------------------------------------
+-------------Auftrags Section--------------
+----------------------------------------
 
+function CreatePatrolMissionForZone(zone, speed, formation)
+    if not zone then
+        env.info("CreatePatrolMissionForZone: Zone is nil, cannot create patrol mission")
+        return nil
+    end
+
+    -- Use default values if not provided
+    speed = speed or BrigadePatrolSpeed or 20 -- Default speed in knots
+    formation = formation or "Off Road" -- Default formation for ground units
+
+    -- Create the patrol mission
+    local patrolMission = AUFTRAG:NewPATROLZONE(zone, speed, 0, formation)
+    env.info("CreatePatrolMissionForZone: Patrol mission created for zone " .. zone:GetName())
+    return patrolMission
+end
+function CreateAirDefenseMissionForZone(zone)
+    if not zone then
+        env.info("CreateAirDefenseMissionForZone: Zone is nil, cannot create air defense mission")
+        return nil
+    end
+
+    local airDefenseMission = AUFTRAG:NewAIRDEFENSE(zone)
+    env.info("CreateAirDefenseMissionForZone: AIRDEFENSE mission created for zone " .. zone:GetName())
+    return airDefenseMission
+end
+---------------------------------------------
+-------------End Auftrags Section----------------
+---------------------------------------------
 
 ---------------------------------------------------------------------------------------------
 ---------------------------------------------------------------------------------------------
@@ -849,8 +974,15 @@ function CreateFighterSQN(coalitionSide, airwing, airfieldName, role)
         if type(chosenTemplate) == "table" then
             chosenTemplate = SelectRandomTemplate(chosenTemplate)
         end
+  -- Inside CreateFighterSQN function:
+        local squadName = GenerateUniqueSquadronName(fighter.name.."_"..airfieldName.."_Squadron")
 
-        local squadName = GenerateUniqueSquadronName(fighter.name.."_"..airfield.."_Squadron")
+        -- Warn if the squadron template group is missing in the mission editor
+        local templateExists = GROUP:FindByName(chosenTemplate)
+        if not templateExists then
+            env.info("CreateFighterSQN: TEMPLATE GROUP NOT FOUND: " .. tostring(chosenTemplate) .. " - squadron may fail to spawn")
+        end
+
         local SQN = SQUADRON:New(chosenTemplate, fighter.count or 1, squadName)
         if fighter.missions and fighter.priority then
             SQN:AddMissionCapability(fighter.missions, fighter.priority)
@@ -864,8 +996,13 @@ function CreateFighterSQN(coalitionSide, airwing, airfieldName, role)
         -- Create payloads from the payload table (if any)
         for _, payload in ipairs(fighter.payloads or {}) do
             local fullPayloadGroupName = chosenTemplate .. (payload.pTname or "")
-            airwing:NewPayload(GROUP:FindByName(fullPayloadGroupName), payload.pcount or fighter.count or 1, payload.pmission or {}, payload.pPriority or 50)
-            env.info("Payload created: " .. tostring(payload.pName) .. " -> " .. tostring(fullPayloadGroupName))
+            local payloadGroup = GROUP:FindByName(fullPayloadGroupName)
+            if payloadGroup then
+                airwing:NewPayload(payloadGroup, payload.pcount or fighter.count or 1, payload.pmission or {}, payload.pPriority or 50)
+                env.info("Payload created: " .. tostring(payload.pName) .. " -> " .. tostring(fullPayloadGroupName))
+            else
+                env.info("CreateFighterSQN: PAYLOAD GROUP NOT FOUND: " .. tostring(fullPayloadGroupName) .. " (template " .. tostring(chosenTemplate) .. ") - skipping payload")
+            end
         end
 
         env.info("Squadron created: " .. squadName .. " using template " .. tostring(chosenTemplate))
@@ -873,11 +1010,13 @@ function CreateFighterSQN(coalitionSide, airwing, airfieldName, role)
 end
 
 -- Create a brigade at the given warehouse / airbase using the templates above
-function CreateBrigadeAtWarehouse(warehouse, airbase, airfieldName, coalitionSide)
+function CreateBrigadeAtWarehouse(warehouse, airbase, airfieldName, coalitionSide, numPatrolMissions)
     if not warehouse or not airbase or not airfieldName or not coalitionSide then
         env.info("CreateBrigadeAtWarehouse: missing parameters")
         return
     end
+
+    numPatrolMissions = numPatrolMissions or 1 -- Default to 1 if not specified
 
     local side = string.lower(coalitionSide)
     local configs = BrigadeTemplates[side]
@@ -888,34 +1027,62 @@ function CreateBrigadeAtWarehouse(warehouse, airbase, airfieldName, coalitionSid
 
     local brigadeName = "Brigade " .. airfieldName
     local Brigade = BRIGADE:New(warehouse, brigadeName)
-    -- Set spawn zone from airbase (use safe pcall)
     local ok, zone = pcall(function() return airbase:GetZone() end)
     if ok and zone then
         Brigade:SetSpawnZone(zone)
+        -- Assign the requested number of patrol missions
+        for i = 1, numPatrolMissions do
+            local patrolMission = CreatePatrolMissionForZone(zone)
+            if patrolMission then
+                Brigade:AddMission(patrolMission)
+            end
+        end
+                -- Assign the requested number of patrol missions
+        for i = 1, numPatrolMissions do
+            local airDefenseMission = CreateAirDefenseMissionForZone(zone)
+            if airDefenseMission then
+                Brigade:AddMission(airDefenseMission)
+            end
+        end
     else
         env.info("CreateBrigadeAtWarehouse: failed to get airbase zone for " .. tostring(airfieldName))
     end
 
     for _, cfg in ipairs(configs) do
-        if cfg.template then
-            local platoonName = cfg.name .. " " .. airfieldName
-            local platoon = PLATOON:New(cfg.template, cfg.count or 1, platoonName)
-            if cfg.missions and cfg.priority then
-                platoon:AddMissionCapability(cfg.missions, cfg.priority)
-            end
-            if cfg.attribute then
-                platoon:SetAttribute(cfg.attribute)
-            end
-            if cfg.weaponRange and #cfg.weaponRange == 2 then
-                local minKm, maxKm = cfg.weaponRange[1], cfg.weaponRange[2]
-                platoon:AddWeaponRange(UTILS.KiloMetersToNM(minKm), UTILS.KiloMetersToNM(maxKm))
-            end
-            Brigade:AddPlatoon(platoon)
-        else
+        if not cfg.template then
             env.info("CreateBrigadeAtWarehouse: missing template for cfg key " .. tostring(cfg.key))
+        else
+            local platoonName = cfg.name .. " " .. airfieldName
+            local chosenTemplate = cfg.template
+            if type(chosenTemplate) == "table" then
+                chosenTemplate = SelectRandomTemplate(chosenTemplate)
+            end
+            chosenTemplate = tostring(chosenTemplate)
+            env.info("CreateBrigadeAtWarehouse: chosenTemplate -> " .. tostring(chosenTemplate) .. " (cfg.key=" .. tostring(cfg.key) .. ")")
+
+            if not SpawnTemplateExists(chosenTemplate) then
+                env.info("CreateBrigadeAtWarehouse: TEMPLATE NOT FOUND: " .. tostring(chosenTemplate) .. " - skipping platoon")
+            else
+                local ok, platoon = pcall(function() return PLATOON:New(chosenTemplate, cfg.count or 1, platoonName) end)
+                if not ok or not platoon then
+                    env.info("CreateBrigadeAtWarehouse: PLATOON:New failed for template " .. tostring(chosenTemplate) .. " (key=" .. tostring(cfg.key) .. ")")
+                else
+                    if cfg.missions and cfg.priority and type(platoon.AddMissionCapability) == "function" then
+                        pcall(function() platoon:AddMissionCapability(cfg.missions, cfg.priority) end)
+                    end
+                    if cfg.attribute and type(platoon.SetAttribute) == "function" then
+                        pcall(function() platoon:SetAttribute(cfg.attribute) end)
+                    end
+                    if cfg.weaponRange and #cfg.weaponRange == 2 and type(platoon.AddWeaponRange) == "function" then
+                        local minKm, maxKm = cfg.weaponRange[1], cfg.weaponRange[2]
+                        pcall(function() platoon:AddWeaponRange(UTILS.KiloMetersToNM(minKm), UTILS.KiloMetersToNM(maxKm)) end)
+                    end
+                    Brigade:AddPlatoon(platoon)
+                end
+            end
         end
-    end
-   
+     end
+
     if coalitionSide == "blue" then
         BlueChief:AddBrigade(Brigade)
     elseif coalitionSide == "red" then
@@ -980,7 +1147,7 @@ function CreateAirwing(warehouse, coalitionSide)
         end
     end
     
-    CreateBrigadeAtWarehouse(warehouse, airbase, airfieldName, coalitionSide)
+    CreateBrigadeAtWarehouse(warehouse, airbase, airfieldName, coalitionSide, 2)
    
     if string.lower(coalitionSide or "") == "blue" then
         BlueChief:AddAirwing(airwing)
@@ -990,4 +1157,133 @@ function CreateAirwing(warehouse, coalitionSide)
         env.info("CreateAirwing: Invalid coalitionSide - " .. tostring(coalitionSide))
         return
     end
+end
+
+
+
+function DeployAirwingsFromWarehouses()
+    WarehousesByAirfield = WarehousesByAirfield or {}
+    for airfieldName, info in pairs(WarehousesByAirfield) do
+        if type(info) == "table" and info.name then
+            local staticObj = STATIC:FindByName(info.name)
+            if not staticObj then
+                env.info("DeployAirwingsFromWarehouses: static not found for " .. tostring(info.name) .. " (airfield " .. tostring(airfieldName) .. ") - skipping")
+            else
+                local sideNorm = NormalizeSide(info.side) or "blue" -- default to blue if unknown
+                CreateAirwing(staticObj, sideNorm)
+                env.info("DeployAirwingsFromWarehouses: CreateAirwing called for " .. tostring(info.name) .. " side=" .. tostring(sideNorm))
+            end
+        else
+            env.info("DeployAirwingsFromWarehouses: invalid entry for airfield " .. tostring(airfieldName))
+        end
+    end
+end
+
+-- Call this after warehouses have been spawned (SpawnWarehousesByFaction returns WarehousesByAirfield)
+function BlueOpsCTLD()
+    env.info(string.format("###Blue CTLD FILE Start Load ###"))
+
+    SETTINGS:SetPlayerMenuOff()
+
+    Blue_ctld = CTLD:New(coalition.side.BLUE,nil,"23rd Transport Squadron")
+
+    Blue_ctld:SetOwnSetPilotGroups(SET_GROUP:New():FilterCoalitions("blue"):FilterCategoryHelicopter():FilterFunction(
+        function(grp)
+            local _type = grp:GetTypeName()
+            local retval = false
+            if _type == "CH-47Fbl1" or _type == "UH-1H" or _type == "Mi-8MT" or _type == "Mi-8MTV2" or _type == "Mi-24P" or _type == "UH-60L" then
+                retval = true
+            end
+            return retval
+        end ):FilterStart())
+
+    Blue_ctld.maximumHoverHeight = 35
+    Blue_ctld.forcehoverload = false
+    Blue_ctld.dropcratesanywhere = true
+    Blue_ctld.buildtime = 10
+    Blue_ctld:UnitCapabilities("UH-1H", true, true, 2, 12, 15, 3000)
+    Blue_ctld:UnitCapabilities("MI-24P", true, true, 2, 12, 15, 3000)
+    Blue_ctld:UnitCapabilities("MI-24V", true, true, 2, 12, 15, 3000)
+    Blue_ctld:UnitCapabilities("CH-47", true, true, 8, 24, 30, 7200)
+
+    Blue_ctld:__Start(5)
+
+    -- troops/crates/repair registrations (ensure Group_* variables exist)
+    Blue_ctld:AddTroopsCargo("Infantry Squad",{Group_Blue_Inf},CTLD_CARGO.Enum.TROOPS,3)
+    Blue_ctld:AddTroopsCargo("Anti-Air",{Group_Blue_SAM},CTLD_CARGO.Enum.TROOPS,3,nil)
+    Blue_ctld:AddTroopsCargo("M113",{Group_Blue_APC},CTLD_CARGO.Enum.TROOPS,4,nil)
+    Blue_ctld:AddTroopsCargo("SHORAD",{Group_Blue_SAM},CTLD_CARGO.Enum.TROOPS,4,nil)
+    Blue_ctld:AddTroopsCargo("Wrenches",{"Blue_CTLD_Wrenches"},CTLD_CARGO.Enum.ENGINEERS,4)
+    Blue_ctld.EngineerSearch = 2000
+
+    Blue_ctld:AddCratesCargo("Marder Group",{Group_Blue_Mech},CTLD_CARGO.Enum.VEHICLE,2,500)
+    Blue_ctld:AddCratesCargo("Hawk_Site", {Group_Blue_SAM_Site},CTLD_CARGO.Enum.VEHICLE,8,500)
+    Blue_ctld:AddCratesCargo("Leopard Group",{Group_Blue_Armoured},CTLD_CARGO.Enum.VEHICLE,4,500)
+    Blue_ctld:AddCratesCargo("M109 Group",{Group_Blue_Arty},CTLD_CARGO.Enum.VEHICLE,2,500)
+    Blue_ctld:AddCratesCargo("Forward Ops Base",{"Blue_CTLD_FOB"},CTLD_CARGO.Enum.FOB,4)
+    Blue_ctld:AddCratesRepair("Humvee Repair","Blue_Unarmed_Humvee_Template",CTLD_CARGO.Enum.REPAIR,1)
+    Blue_ctld.repairtime = 300
+
+    -- Add blue ops zones to CTLD
+    if blueAirfieldszoneset then
+        blueAirfieldszoneset:ForEachZone(function(zone)
+            Blue_ctld:AddCTLDZone(zone:GetName(),CTLD.CargoZoneType.LOAD,SMOKECOLOR.Blue,true,true)
+            env.info("Blue ZONE added to CTLD LOAD ZONE: " .. zone:GetName())
+        end)
+    end
+
+    env.info(string.format("###Blue CTLD FILE Loaded Succesfully###"))
+end
+
+function RedOpsCTLD()
+    env.info(string.format("###Red CTLD FILE Start Load ###"))
+
+    SETTINGS:SetPlayerMenuOff()
+
+    Red_ctld = CTLD:New(coalition.side.RED,nil,"23rd Transport Squadron")
+
+    Red_ctld:SetOwnSetPilotGroups(SET_GROUP:New():FilterCoalitions("red"):FilterCategoryHelicopter():FilterFunction(
+        function(grp)
+            local _type = grp:GetTypeName()
+            local retval = false
+            if _type == "CH-47Fbl1" or _type == "UH-1H" or _type == "Mi-8MT" or _type == "Mi-8MTV2" or _type == "Mi-24P" or _type == "UH-60L" then
+                retval = true
+            end
+            return retval
+        end ):FilterStart())
+
+    Red_ctld.maximumHoverHeight = 35
+    Red_ctld.forcehoverload = false
+    Red_ctld.dropcratesanywhere = true
+    Red_ctld.buildtime = 10
+    Red_ctld:UnitCapabilities("UH-1H", true, true, 2, 12, 15, 3000)
+    Red_ctld:UnitCapabilities("MI-24P", true, true, 2, 12, 15, 3000)
+    Red_ctld:UnitCapabilities("MI-24V", true, true, 2, 12, 15, 3000)
+    Red_ctld:UnitCapabilities("CH-47", true, true, 8, 24, 30, 7200)
+
+    Red_ctld:__Start(5)
+
+    Red_ctld:AddTroopsCargo("Infantry Squad",{Group_Red_Inf},CTLD_CARGO.Enum.TROOPS,3)
+    Red_ctld:AddTroopsCargo("Anti-Air",{Group_Red_SAM},CTLD_CARGO.Enum.TROOPS,3,nil)
+    Red_ctld:AddTroopsCargo("M113",{Group_Red_APC},CTLD_CARGO.Enum.TROOPS,4,nil)
+    Red_ctld:AddTroopsCargo("SHORAD",{Group_Red_SAM},CTLD_CARGO.Enum.TROOPS,4,nil)
+    Red_ctld:AddTroopsCargo("Wrenches",{"Red_CTLD_Wrenches"},CTLD_CARGO.Enum.ENGINEERS,4)
+    Red_ctld.EngineerSearch = 2000
+
+    Red_ctld:AddCratesCargo("Marder Group",{Group_Red_Mech},CTLD_CARGO.Enum.VEHICLE,2,500)
+    Red_ctld:AddCratesCargo("Hawk_Site", {Group_Red_SAM_Site},CTLD_CARGO.Enum.VEHICLE,8,500)
+    Red_ctld:AddCratesCargo("Leopard Group",{Group_Red_Armoured},CTLD_CARGO.Enum.VEHICLE,4,500)
+    Red_ctld:AddCratesCargo("M109 Group",{Group_Red_Arty},CTLD_CARGO.Enum.VEHICLE,2,500)
+    Red_ctld:AddCratesCargo("Forward Ops Base",{"Red_CTLD_FOB"},CTLD_CARGO.Enum.FOB,4)
+    Red_ctld:AddCratesRepair("Humvee Repair","Red_Unarmed_Humvee_Template",CTLD_CARGO.Enum.REPAIR,1)
+    Red_ctld.repairtime = 300
+
+    if redAirfieldszoneset then
+        redAirfieldszoneset:ForEachZone(function(zone)
+            Red_ctld:AddCTLDZone(zone:GetName(),CTLD.CargoZoneType.LOAD,SMOKECOLOR.Red,true,true)
+            env.info("Red ZONE added to CTLD LOAD ZONE: " .. zone:GetName())
+        end)
+    end
+
+    env.info(string.format("###Red CTLD FILE Loaded Succesfully###"))
 end

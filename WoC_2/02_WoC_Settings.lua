@@ -23,3 +23,8 @@ CheifVerbosity = 5
 MissionLimit = 4
 --Set max missions per chief to 100 by default
 ChiefMissionLimit =100
+
+blueSide = "USA"
+redSide = "RUSSIA"
+---ground patrol speed in knots
+BrigadePatrolSpeed = 20 -- Speed in knots for brigade patrols
