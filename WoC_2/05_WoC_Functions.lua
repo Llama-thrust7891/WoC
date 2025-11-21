@@ -160,6 +160,9 @@ AirfieldNames = getAllAirbaseNames()
 -- ensure globals exist to avoid nil concat / table.insert errors
 blueAirfields = blueAirfields or {}
 redAirfields = redAirfields or {}
+-- Initialize zone sets as MOOSE SET_ZONE so :AddZone and :ForEachZone exist
+blueAirfieldszoneset = blueAirfieldszoneset or SET_ZONE:New()
+redAirfieldszoneset  = redAirfieldszoneset  or SET_ZONE:New()
 referenceAirfield = referenceAirfield or nil
 ValidateGroupGlobals()
 -----------------SortredAirfield-----------------------
@@ -573,28 +576,27 @@ function SpawnAirfieldGuards(coalitionSide)
                     local randomIndex = math.random(1, #samTemplates)
                     local samTemplate = samTemplates[randomIndex]
                     local GroupName = samTemplate .. "_SAMSite_" .. airfieldName .. "_" .. i
-                    SpawnGroupAtPoint(samTemplate, GroupName, airfieldZone, 500, 1000, land.SurfaceType.LAND)
+                    SpawnGroupAtPoint(samTemplate, GroupName, airfieldZone, 500, 1500, land.SurfaceType.LAND)
                 end
-
                 -- Check parking spots before deploying main SAM site
                 local parkingData = airbaseParkingSummary(airfieldName)
-                if parkingData and parkingData.aircraftParkingCount > 80 then
-                    local siteTemplate, siteGroupName
-                    if coalitionSide == "blue" then
-                        siteTemplate = Group_Blue_SAM_Site
-                        siteGroupName = siteTemplate .. "_MainSite_" .. airfieldName
-                    elseif coalitionSide == "red" then
-                        siteTemplate = Group_Red_SAM_Site
-                        siteGroupName = siteTemplate .. "_MainSite_" .. airfieldName
-                    end
-                    if siteTemplate then
-                        SpawnGroupAtPoint(siteTemplate, siteGroupName, airfieldZone, 500, 1000, land.SurfaceType.LAND)
-                        env.info("SpawnAirfieldGuards: Main SAM site spawned for " .. airfieldName)
-                    end
+                    if parkingData and parkingData.aircraftParkingCount > 70 then
+                        local siteTemplate, siteGroupName
+                        if coalitionSide == "blue" then
+                            siteTemplate = Group_Blue_SAM_Site
+                            siteGroupName = siteTemplate .. "_MainSite_" .. airfieldName
+                        elseif coalitionSide == "red" then
+                            siteTemplate = Group_Red_SAM_Site
+                            siteGroupName = siteTemplate .. "_MainSite_" .. airfieldName
+                        end
+                        if siteTemplate then
+                        -- spawn using clear-zone function with 170m search radius
+                             SpawnGroupclearzone(siteTemplate, siteGroupName, airfieldZone, 150)
+                             env.info("SpawnAirfieldGuards: Main SAM site spawned (clearzone) for " .. airfieldName)
+                        end
                 else
-                    env.info("SpawnAirfieldGuards: Not enough parking spots for main SAM site at " .. airfieldName)
+                    env.info("SpawnAirfieldGuards: Not enough parking spots for main SAM site at " .. airfieldName.."No. "..parkingData.aircraftParkingCount)
                 end
-
             else
                 env.info("SpawnAirfieldGuards: failed to get airbase Vec2 for " .. tostring(airfieldName))
             end
@@ -615,7 +617,7 @@ function SpawnWarehouseGuards(coalitionSide)
             local ok, wvec = pcall(function() return warehouse:GetVec2() end)
             if ok and wvec and wvec.x then
                 -- Create warehouse guard zone
-                local warehouseZone = ZONE_RADIUS:New("zone_warehouse_" .. warehouseName, wvec, 200, false)
+                local warehouseZone = ZONE_RADIUS:New("zone_warehouse_" .. warehouseName, wvec, 1500, false)
                 env.info("Warehouse zone created for " .. airfieldName)
                 
                 -- Spawn 2 random guard groups at warehouse
@@ -633,6 +635,7 @@ function SpawnWarehouseGuards(coalitionSide)
                     local GroupName = samTemplate .. "_SAM_" .. airfieldName .. "_" .. i
                     SpawnGroupAtPoint(samTemplate, GroupName, warehouseZone, 75, 150)
                 end
+
             else
                 env.info("SpawnAirfieldGuards: failed to get warehouse Vec2 for " .. tostring(warehouseName))
             end
@@ -872,9 +875,7 @@ UsedSquadronNames = {} -- Global set to store used squadron names
 local blueawacscount = 0
 local redawacscount = 0
 
--- Initialize zone sets if they don't exist
-blueAirfieldszoneset = blueAirfieldszoneset or SET_ZONE:New()
-redAirfieldszoneset = redAirfieldszoneset or SET_ZONE:New()
+
 
 
 -- Helper function to generate a unique squadron name
@@ -1225,11 +1226,13 @@ function BlueOpsCTLD()
     Blue_ctld.repairtime = 300
 
     -- Add blue ops zones to CTLD
-    if blueAirfieldszoneset then
+    if blueAirfieldszoneset and type(blueAirfieldszoneset.ForEachZone) == "function" then
         blueAirfieldszoneset:ForEachZone(function(zone)
             Blue_ctld:AddCTLDZone(zone:GetName(),CTLD.CargoZoneType.LOAD,SMOKECOLOR.Blue,true,true)
             env.info("Blue ZONE added to CTLD LOAD ZONE: " .. zone:GetName())
         end)
+    else
+        env.info("BlueOpsCTLD: blueAirfieldszoneset missing or not a SET_ZONE")
     end
 
     env.info(string.format("###Blue CTLD FILE Loaded Succesfully###"))
@@ -1278,12 +1281,692 @@ function RedOpsCTLD()
     Red_ctld:AddCratesRepair("Humvee Repair","Red_Unarmed_Humvee_Template",CTLD_CARGO.Enum.REPAIR,1)
     Red_ctld.repairtime = 300
 
-    if redAirfieldszoneset then
+    -- Add red ops zones to CTLD
+    if redAirfieldszoneset and type(redAirfieldszoneset.ForEachZone) == "function" then
         redAirfieldszoneset:ForEachZone(function(zone)
             Red_ctld:AddCTLDZone(zone:GetName(),CTLD.CargoZoneType.LOAD,SMOKECOLOR.Red,true,true)
             env.info("Red ZONE added to CTLD LOAD ZONE: " .. zone:GetName())
         end)
+    else
+        env.info("RedOpsCTLD: redAirfieldszoneset missing or not a SET_ZONE")
     end
 
     env.info(string.format("###Red CTLD FILE Loaded Succesfully###"))
 end
+
+
+-----Monitor zones for capture-----
+function monitoropszones()
+    if not OPS_Zones or type(OPS_Zones.ForEachZone) ~= "function" then
+        env.info("monitoropszones: OPS_Zones missing or does not support ForEachZone")
+        return
+    end
+
+    OPS_Zones:ForEachZone(function(opszone)
+        local okName, zoneName = pcall(function() return opszone:GetName() end)
+        env.info("Monitoring OPSZONE: " .. tostring(zoneName or "unknown"))
+
+        -- assign safe handler for capture event
+        opszone.OnAfterCaptured = function(self, From, Event, To, Coalition)
+            local ok, _ = pcall(function() end) -- placeholder to keep pattern
+            -- determine coalition string
+            local coalitionSideStr = nil
+            if Coalition == coalition.side.BLUE then coalitionSideStr = "blue"
+            elseif Coalition == coalition.side.RED then coalitionSideStr = "red"
+            else coalitionSideStr = tostring(Coalition) end
+
+            local zoneObj = nil
+            pcall(function() zoneObj = self:GetZone() end)
+            local airfieldName = (zoneObj and zoneObj:GetName()) or zoneName or "UnknownAirfield"
+            env.info("OPSZONE captured: " .. tostring(airfieldName) .. " by " .. tostring(coalitionSideStr))
+
+            -- warehouse name used elsewhere in script
+            local warehouseName = "Warehouse - " .. airfieldName
+
+            -- remove existing airwing if present (best-effort, guarded)
+            local existingAirwing = nil
+            if coalitionSideStr == "blue" then
+                existingAirwing = BlueAirwings and BlueAirwings[warehouseName]
+            else
+                existingAirwing = RedAirwings and RedAirwings[warehouseName]
+            end
+
+            if existingAirwing then
+                pcall(function()
+                    if type(existingAirwing.__Stop) == "function" then existingAirwing:__Stop() end
+                end)
+                -- try to delete stock items if API available
+                if type(existingAirwing.GetStockInfo) == "function" then
+                    local ok, stockInfo = pcall(function() return existingAirwing:GetStockInfo() end)
+                    if ok and type(stockInfo) == "table" then
+                        for stockItem, _ in pairs(stockInfo) do
+                            pcall(function()
+                                if type(existingAirwing._DeleteStockItem) == "function" then
+                                    existingAirwing:_DeleteStockItem(stockItem)
+                                end
+                            end)
+                        end
+                    end
+                end
+                env.info("Existing airwing cleaned up (if supported): " .. warehouseName)
+                if coalitionSideStr == "blue" and BlueAirwings then BlueAirwings[warehouseName] = nil
+                elseif coalitionSideStr == "red" and RedAirwings then RedAirwings[warehouseName] = nil end
+            end
+
+            -- destroy existing warehouse static (if present)
+            local ware = STATIC:FindByName(warehouseName)
+            if ware then
+                pcall(function() ware:Destroy() end)
+                env.info("Destroyed existing warehouse static: " .. warehouseName)
+            end
+
+            -- spawn new warehouse and create airwing & guards
+            local countryID = (coalitionSideStr == "blue") and country.id.USA or country.id.RUSSIA
+            pcall(function() SpawnWarehouse(airfieldName, warehouseName, countryID) end)
+
+            -- give a small delay to let static appear (best-effort); find static
+            local warehouseStatic = nil
+            local okFind, res = pcall(function() return STATIC:FindByName(warehouseName) end)
+            if okFind then warehouseStatic = res end
+
+            if warehouseStatic then
+                -- create airwing using your existing CreateAirwing function
+                pcall(function() CreateAirwing(warehouseStatic, coalitionSideStr) end)
+                env.info("Deployed airwing at " .. airfieldName .. " for " .. coalitionSideStr)
+                -- spawn ground brigades/guards for the new warehouse (optional)
+                pcall(function() CreateBrigadeAtWarehouse(warehouseStatic, AIRBASE:FindByName(airfieldName), airfieldName, coalitionSideStr, 2) end)
+            else
+                env.info("monitoropszones: failed to locate newly created warehouse static: " .. warehouseName)
+            end
+
+            -- register CTLD load zone for this airfield (best-effort)
+            if coalitionSideStr == "blue" and Blue_ctld then
+                pcall(function() Blue_ctld:AddCTLDZone(airfieldName, CTLD.CargoZoneType.LOAD, SMOKECOLOR.Blue, true, true) end)
+                env.info("Blue CTLD LOAD zone added: " .. airfieldName)
+            elseif coalitionSideStr == "red" and Red_ctld then
+                pcall(function() Red_ctld:AddCTLDZone(airfieldName, CTLD.CargoZoneType.LOAD, SMOKECOLOR.Red, true, true) end)
+                env.info("Red CTLD LOAD zone added: " .. airfieldName)
+            end
+        end
+    end)
+end
+---blue player tasking controller
+function PlayerTaskingBlue()
+    local settings = SETTINGS or _SETTINGS
+    if settings and type(settings.SetPlayerMenuOn) == "function" then
+        settings:SetPlayerMenuOn()
+    end
+    if settings and type(settings.SetImperial) == "function" then
+        settings:SetImperial()
+    end
+    if settings and type(settings.SetA2G_BR) == "function" then
+        settings:SetA2G_BR()
+    end
+
+    -- create controller (safe)
+    local ok, BlueTaskManagerA2G = pcall(function()
+        return PLAYERTASKCONTROLLER:New("82 Airbourne", coalition.side.BLUE, PLAYERTASKCONTROLLER.Type.A2G)
+    end)
+    if not ok or not BlueTaskManagerA2G then
+        env.info("PlayerTaskingBlue: failed to create PLAYERTASKCONTROLLER")
+        return nil
+    end
+
+    -- locale
+    if type(BlueTaskManagerA2G.SetLocale) == "function" then
+        pcall(function() BlueTaskManagerA2G:SetLocale("en") end)
+    end
+
+    -- Setup intel (best-effort)
+    if type(BlueTaskManagerA2G.SetupIntel) == "function" then
+        pcall(function() BlueTaskManagerA2G:SetupIntel("Blue") end)
+    end
+
+    -- Menu / callsign
+    if type(BlueTaskManagerA2G.SetMenuName) == "function" then
+        pcall(function() BlueTaskManagerA2G:SetMenuName("Ghost Bat") end)
+    end
+
+    -- Add accept zones CapZone1..CapZone14 if they exist
+    for i = 1, 14 do
+        local cz = _G["CapZone" .. i]
+        if cz and type(BlueTaskManagerA2G.AddAcceptZone) == "function" then
+            pcall(function() BlueTaskManagerA2G:AddAcceptZone(cz) end)
+        end
+    end
+
+    -- Optional SRS setup (only if required vars provided)
+    if hereSRSPath and hereSRSPort then
+        if type(BlueTaskManagerA2G.SetSRS) == "function" then
+            pcall(function()
+                BlueTaskManagerA2G:SetSRS({130,250},{radio.modulation.AM,radio.modulation.AM},
+                                         hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+            end)
+        end
+        if type(BlueTaskManagerA2G.SetSRSBroadcast) == "function" then
+            pcall(function() BlueTaskManagerA2G:SetSRSBroadcast({130,250},{radio.modulation.AM,radio.modulation.AM}) end)
+        end
+    end
+
+    -- Task whitelist and radius (guarded)
+    if type(BlueTaskManagerA2G.SetTaskWhiteList) == "function" then
+        pcall(function()
+            BlueTaskManagerA2G:SetTaskWhiteList({
+                AUFTRAG.Type.CAS,
+                AUFTRAG.Type.BAI,
+                AUFTRAG.Type.BOMBING,
+                AUFTRAG.Type.BOMBRUNWAY,
+                AUFTRAG.Type.SEAD,
+                AUFTRAG.Type.INTERCEPT,
+                AUFTRAG.Type.CAP
+            })
+        end)
+    end
+    if type(BlueTaskManagerA2G.SetTargetRadius) == "function" then
+        pcall(function() BlueTaskManagerA2G:SetTargetRadius(1000) end)
+    end
+
+    env.info("PlayerTaskingBlue: A2G controller initialized")
+    return BlueTaskManagerA2G
+end
+---red player tasking controller
+function PlayerTaskingRed()
+    local settings = SETTINGS or _SETTINGS
+    if settings and type(settings.SetPlayerMenuOn) == "function" then
+        settings:SetPlayerMenuOn()
+    end
+    if settings and type(settings.SetImperial) == "function" then
+        settings:SetImperial()
+    end
+    if settings and type(settings.SetA2G_BR) == "function" then
+        settings:SetA2G_BR()
+    end
+
+    -- create controller (safe)
+    local ok, RedTaskManagerA2G = pcall(function()
+        return PLAYERTASKCONTROLLER:New("31st Infantry", coalition.side.RED, PLAYERTASKCONTROLLER.Type.A2G)
+    end)
+    if not ok or not RedTaskManagerA2G then
+        env.info("PlayerTaskingRed: failed to create PLAYERTASKCONTROLLER")
+        return nil
+    end
+
+    -- locale
+    if type(RedTaskManagerA2G.SetLocale) == "function" then
+        pcall(function() RedTaskManagerA2G:SetLocale("en") end)
+    end
+
+    -- Setup intel (best-effort)
+    if type(RedTaskManagerA2G.SetupIntel) == "function" then
+        pcall(function() RedTaskManagerA2G:SetupIntel("Red") end)
+    end
+
+    -- Menu / callsign
+    if type(RedTaskManagerA2G.SetMenuName) == "function" then
+        pcall(function() RedTaskManagerA2G:SetMenuName("SnakeEyes") end)
+    end
+
+    -- Add accept zones CapZone1..CapZone14 if they exist
+    for i = 1, 14 do
+        local cz = _G["CapZone" .. i]
+        if cz and type(RedTaskManagerA2G.AddAcceptZone) == "function" then
+            pcall(function() RedTaskManagerA2G:AddAcceptZone(cz) end)
+        end
+    end
+
+    -- Optional SRS setup (only if required vars provided)
+    if hereSRSPath and hereSRSPort then
+        if type(RedTaskManagerA2G.SetSRS) == "function" then
+            pcall(function()
+                RedTaskManagerA2G:SetSRS({130,240},{radio.modulation.AM,radio.modulation.AM},
+                                         hereSRSPath,"female","en-GB",hereSRSPort,"Microsoft Hazel Desktop",0.7,hereSRSGoogle)
+            end)
+        end
+        if type(RedTaskManagerA2G.SetSRSBroadcast) == "function" then
+            pcall(function() RedTaskManagerA2G:SetSRSBroadcast({127,240},{radio.modulation.AM,radio.modulation.AM}) end)
+        end
+    end
+
+    -- Task whitelist and radius (guarded)
+    if type(RedTaskManagerA2G.SetTaskWhiteList) == "function" then
+        pcall(function()
+            RedTaskManagerA2G:SetTaskWhiteList({
+                AUFTRAG.Type.CAS,
+                AUFTRAG.Type.BAI,
+                AUFTRAG.Type.BOMBING,
+                AUFTRAG.Type.BOMBRUNWAY,
+                AUFTRAG.Type.SEAD,
+                AUFTRAG.Type.INTERCEPT,
+                AUFTRAG.Type.CAP,
+                AUFTRAG.NewTROOPTRANSPORT
+            })
+        end)
+    end
+    if type(RedTaskManagerA2G.SetTargetRadius) == "function" then
+        pcall(function() RedTaskManagerA2G:SetTargetRadius(1000) end)
+    end
+
+    env.info("PlayerTaskingRed: A2G controller initialized")
+    return RedTaskManagerA2G
+end
+
+
+local function NormalizeCoalitionString(Coalition)
+    local c = string.lower(tostring(Coalition or ""))
+    if c == "usa" then return "blue" end
+    if c == "russia" then return "red" end
+    return c
+end
+
+local function FindFactoryByWarehouseName(warehouseName)
+    if not warehouseName then return nil end
+    local factory = STATIC:FindByName(warehouseName)
+    if factory then return factory end
+    local alt = warehouseName:gsub("^warehouse_", ""):gsub("^Warehouse %- ", "")
+    return STATIC:FindByName("Warehouse - " .. alt) or STATIC:FindByName("warehouse_" .. alt)
+end
+
+local function IncreasePayloadIfBelow(airwing, payload, limit)
+    if not payload or not airwing then return end
+    if type(airwing.GetPayloadAmount) ~= "function" or type(airwing.IncreasePayloadAmount) ~= "function" then return end
+    local ok, current = pcall(function() return airwing:GetPayloadAmount(payload) end)
+    current = (ok and tonumber(current)) or 0
+    if current <= (limit or 2) then
+        pcall(function() airwing:IncreasePayloadAmount(payload, 1) end)
+        env.info(string.format("Increased payload '%s' -> %d", tostring(payload), current + 1))
+    end
+end
+
+local function GetPayloadSafe(airwing, payload)
+    if not payload or not airwing or type(airwing.GetPayloadAmount) ~= "function" then return 0 end
+    local ok, amt = pcall(function() return airwing:GetPayloadAmount(payload) end)
+    return (ok and tonumber(amt)) or 0
+end
+
+local function PayloadListForCoalition(coal)
+    if coal == "blue" then
+        return {
+            "Blue_payload_Fighter_AA","Blue_payload_Fighter_CAS","Blue_payload_LtFighter_AA",
+            "Blue_payload_LtFighter_CAS","Blue_payload_LtFighter_SEAD","Blue_payload_Attack_CAS",
+            "Blue_payload_Attack_SEAD","Blue_payload_helo_Trans","Blue_payload_helo_CAS",
+            "Blue_payload_Attackhelo_CAS","Blue_payload_Awacs"
+        }
+    elseif coal == "red" then
+        return {
+            "Red_payload_Fighter_AA","Red_payload_LTFighter_CAS","Red_payload_LtFighter_AA",
+            "Red_payload_Attack_SEAD","Red_payload_Attack_CAS","Red_payload_helo_Trans",
+            "Red_payload_helo_CAS","Red_payload_Attackhelo_CAS","Red_payload_Attackhelo_Trans",
+            "Red_payload_Awacs"
+        }
+    end
+    return {}
+end
+
+local function LogPayloadSummary(airwing, warehouseName, coal)
+    local payloads = PayloadListForCoalition(coal)
+    local vals = {}
+    for _, name in ipairs(payloads) do
+        table.insert(vals, tostring(GetPayloadSafe(airwing, _G[name])))
+    end
+    env.info(string.format("ProduceAirwing: payload summary at %s => %s", warehouseName, table.concat(vals, ", ")))
+end
+
+local function FindSquadronsForRole(airwing, warehouseName, coal, roleKey)
+    local out = {}
+    if type(airwing.GetSquadrons) == "function" then
+        local ok, sqns = pcall(function() return airwing:GetSquadrons() end)
+        if ok and type(sqns) == "table" then
+            for _, s in ipairs(sqns) do
+                local okn, nm = pcall(function() return s:GetName() end)
+                if okn and nm and nm:lower():find(roleKey, 1, true) then table.insert(out, s) end
+            end
+        end
+    else
+        local patterns = {
+            fighter = (coal == "blue" and "Blue Fighter Squadron " or "Red Fighter Squadron "),
+            ["light fighter"] = (coal == "blue" and "Blue Light Fighter Squadron " or "Red Light Fighter Squadron "),
+            attack = (coal == "blue" and "Blue Attack Squadron " or "Red Attack Squadron "),
+            ["transport helo"] = (coal == "blue" and "Blue Transport Helo Squadron " or "Red Transport Helo Squadron "),
+            ["attack helo"] = (coal == "blue" and "Blue Attack Helo Squadron " or "Red Attack Helo Squadron "),
+            awacs = (coal == "blue" and "Blue_AWACS" or "Red_AWACS")
+        }
+        local pat = patterns[roleKey]
+        if pat then
+            local airfield = warehouseName:gsub("^Warehouse %- ", ""):gsub("^warehouse_", "")
+            local ok, s = pcall(function() return airwing:GetSquadron(pat .. airfield) end)
+            if ok and s then table.insert(out, s) end
+            if roleKey == "awacs" then
+                local ok2, s2 = pcall(function() return airwing:GetSquadron(pat) end)
+                if ok2 and s2 then table.insert(out, s2) end
+            end
+        end
+    end
+    return out
+end
+
+local function EnsureSquadronHasAssets(airwing, squadron, minAssets, addAmount)
+    if not squadron or not airwing then return end
+    local ok, count = pcall(function() return squadron:CountAssets() end)
+    count = (ok and tonumber(count)) or 0
+    if count < (minAssets or 2) then
+        pcall(function() airwing:AddAssetToSquadron(squadron, addAmount or 2) end)
+        env.info(string.format("Added assets to squadron %s (was %d)", tostring(squadron and squadron:GetName() or "unknown"), count))
+    else
+        env.info(string.format("Squadron %s has %d assets (ok)", tostring(squadron and squadron:GetName() or "unknown"), count))
+    end
+end
+
+-- Refactored ProduceAirwing uses helpers above
+local function ProduceAirwing(warehouseName, airwing, Coalition)
+    if not warehouseName or not airwing or not Coalition then
+        env.info("ProduceAirwing: missing parameters")
+        return false
+    end
+
+    local coal = NormalizeCoalitionString(Coalition)
+    local factory = FindFactoryByWarehouseName(warehouseName)
+    if not factory or not factory:IsAlive() then
+        env.info("ProduceAirwing: factory not found or destroyed for " .. tostring(warehouseName))
+        return false
+    end
+
+    env.info(string.format("ProduceAirwing: producing for %s (coalition=%s)", tostring(warehouseName), tostring(coal)))
+
+    for _, name in ipairs(PayloadListForCoalition(coal)) do
+        IncreaseIfBelow(airwing, _G[name])
+    end
+
+    LogPayloadSummary(airwing, warehouseName, coal)
+
+    local roles = { "fighter", "light fighter", "attack", "transport helo", "attack helo", "awacs" }
+    for _, role in ipairs(roles) do
+        local squadrons = FindSquadronsForRole(airwing, warehouseName, coal, role)
+        for _, sq in ipairs(squadrons) do
+            EnsureSquadronHasAssets(airwing, sq, 2, 2)
+        end
+    end
+
+    return true
+end
+-- Helpers for brigade production
+local function NormalizeCoalition(coalition)
+    if not coalition then return nil end
+    local c = string.lower(tostring(coalition))
+    if c == "usa" then return "blue" end
+    if c == "russia" then return "red" end
+    return c
+end
+
+local function FindPlatoonSafe(brigade, name)
+    if not brigade or not name then return nil end
+    local ok, plt = pcall(function() return brigade:GetPlatoon(name) end)
+    return ok and plt or nil
+end
+
+local function CountAssetsSafe(platoon)
+    if not platoon then return 0 end
+    local ok, n = pcall(function() return platoon:CountAssets() end)
+    return (ok and tonumber(n)) or 0
+end
+
+local function EnsurePlatoonAssets(brigade, platoon, minAssets, addAmount)
+    if not platoon or not brigade then return end
+    local n = CountAssetsSafe(platoon)
+    minAssets = minAssets or 2
+    addAmount = addAmount or 1
+    if n < minAssets then
+        pcall(function() brigade:AddAssetToSquadron(platoon, addAmount) end)
+        env.info(string.format("Added %d assets to platoon %s (was %d)", addAmount, tostring(platoon:GetName()), n))
+    else
+        env.info(string.format("Platoon %s has %d assets (ok)", tostring(platoon:GetName()), n))
+    end
+end
+
+-- Refactored ProduceBrigade: lightweight, safe, coalition-aware
+local function ProduceBrigadeSafe(warehouseName, brigade, Coalition)
+    if not brigade or not Coalition then return false end
+    local coal = NormalizeCoalition(Coalition)
+    -- derive airfield name tolerant to "Warehouse - X" or "warehouse_X"
+    local airfield = tostring(warehouseName or ""):gsub("^Warehouse %- ", ""):gsub("^warehouse_", "")
+
+    env.info(string.format("ProduceBrigadeSafe: producing for brigade at %s (coalition=%s)", airfield, tostring(coal)))
+
+    -- Define platoon name prefixes per side
+    local platoonNames = {}
+    if coal == "blue" then
+        platoonNames = {
+            {"Blue Motorised Platoon "..airfield, 3, 1},
+            {"Blue Mechanised Platoon "..airfield, 3, 1},
+            {"Blue Armoured Platoon "..airfield, 3, 1},
+            {"Blue Artillary Platoon "..airfield, 2, 1},
+            {"Blue Logistics Platoon "..airfield, 3, 1},
+            {"Blue Infantry Platoon "..airfield, 3, 1},
+            {"Blue SAM Platoon "..airfield, 3, 1},
+        }
+    elseif coal == "red" then
+        platoonNames = {
+            {"Red Motorised Platoon "..airfield, 3, 1},
+            {"Red Mechanised Platoon "..airfield, 3, 1},
+            {"Red Armoured Platoon "..airfield, 3, 1},
+            {"Red Artillary Platoon "..airfield, 2, 1},
+            {"Red Logistics Platoon "..airfield, 3, 1},
+            {"Red Infantry Platoon "..airfield, 3, 2}, -- infantry adds 2 in red original code
+            {"Red SAM Platoon "..airfield, 2, 1},
+        }
+    else
+        env.info("ProduceBrigadeSafe: unknown coalition " .. tostring(Coalition))
+        return false
+    end
+
+    -- Iterate and ensure assets
+    for _, entry in ipairs(platoonNames) do
+        local pname, minAssets, addAmt = entry[1], entry[2], entry[3]
+        local plt = FindPlatoonSafe(brigade, pname)
+        if plt then
+            EnsurePlatoonAssets(brigade, plt, minAssets, addAmt)
+        else
+            env.info("ProduceBrigadeSafe: platoon not found: " .. tostring(pname))
+        end
+    end
+
+    return true
+end
+
+
+local ProductionScheduler = nil
+
+local function ProductionTick()
+    -- Blue airwings
+    if BlueAirwings then
+        for warehouseName, airwing in pairs(BlueAirwings) do
+            pcall(function() ProduceAirwing(warehouseName, airwing, "blue") end)
+        end
+    end
+    -- Red airwings
+    if RedAirwings then
+        for warehouseName, airwing in pairs(RedAirwings) do
+            pcall(function() ProduceAirwing(warehouseName, airwing, "red") end)
+        end
+    end
+
+    -- Blue brigades
+    if BlueBrigades then
+        for warehouseName, brigade in pairs(BlueBrigades) do
+            pcall(function() ProduceBrigadeSafe(warehouseName, brigade, "blue") end)
+        end
+    end
+
+    -- Red brigades
+    if RedBrigades then
+        for warehouseName, brigade in pairs(RedBrigades) do
+            pcall(function() ProduceBrigadeSafe(warehouseName, brigade, "red") end)
+        end
+    end
+end
+
+function StartProductionScheduler(interval)
+    interval = tonumber(interval) or PRODUCTION_INTERVAL
+    if ProductionScheduler then
+        env.info("StartProductionScheduler: already running")
+        return
+    end
+    ProductionScheduler = SCHEDULER:New(nil,
+        function()
+            ProductionTick()
+        end,
+        {}, 0, interval)
+    env.info("StartProductionScheduler: started, interval=" .. tostring(interval))
+end
+
+function StopProductionScheduler()
+    if ProductionScheduler then
+        ProductionScheduler:Stop()
+        ProductionScheduler = nil
+        env.info("StopProductionScheduler: stopped")
+    else
+        env.info("StopProductionScheduler: not running")
+    end
+end
+
+-- start at mission init (call where appropriate)
+StartProductionScheduler(PRODUCTION_INTERVAL)
+
+
+-- helper: track last attack time per opszone to avoid mission spam
+ OpszoneLastAttackTime = OpszoneLastAttackTime or {}
+
+
+local function GetZoneOwnerInfo(opszone)
+    if not opszone or type(opszone.GetOwner) ~= "function" then return nil end
+    local ownerID = opszone:GetOwner() or 0
+    if ownerID == 1 then return "red", ownerID end
+    if ownerID == 2 then return "blue", ownerID end
+    return "neutral", ownerID
+end
+
+local function CountUnitsInOpsZone(opszone, coalitionStr)
+    if not opszone or not opszone.GetZone then return 0 end
+    local zone = opszone:GetZone()
+    if not zone then return 0 end
+    local set = SET_UNIT:New():FilterZones({zone})
+    if coalitionStr and coalitionStr ~= "neutral" then
+        set:FilterCoalitions(coalitionStr)
+    end
+    set:FilterOnce()
+    local ok, cnt = pcall(function() return set:CountAlive() end)
+    return (ok and tonumber(cnt)) or 0
+end
+
+local function CountChiefMissionsForZone(chief, auftragType, zone)
+    if not chief or type(chief.GetMissions) ~= "function" or not zone then return 0 end
+    local count = 0
+    local ok, missions = pcall(function() return chief:GetMissions() end)
+    if not ok or type(missions) ~= "table" then return 0 end
+    for _, mission in pairs(missions) do
+        if mission and mission.Type == auftragType and mission.Zone and mission.Zone:GetName() == zone:GetName() then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function LaunchGroundPatrolAgainstZone(attackerChief, zone, airfieldName)
+    if not attackerChief or not zone then return false end
+    -- create a patrol zone mission as a generic ground assault (signature matches existing codebase)
+    local ok, patrol = pcall(function() return AUFTRAG:NewPATROLZONE(zone, 80, nil, "On Road") end)
+    if not ok or not patrol then
+        env.info("LaunchGroundPatrolAgainstZone: failed to create patrol for " .. tostring(airfieldName))
+        return false
+    end
+    pcall(function() attackerChief:AddMission(patrol) end)
+    MESSAGE:New(string.format("%s Forces are launching a ground patrol against OPSZONE: %s", (attackerChief == RedChief and "Red" or "Blue"), airfieldName), 20):ToAll()
+    return true
+end
+
+-- main tick: evaluate OPS_Zones and assign auftrag missions when zone is "heavily damaged"
+local function OpszoneCaptureTick()
+    if not OPS_Zones or type(OPS_Zones.ForEachZone) ~= "function" then
+        env.info("OpszoneCaptureTick: OPS_Zones missing or invalid")
+        return
+    end
+
+    OPS_Zones:ForEachZone(function(opszone)
+        if not opszone then return end
+        local zoneObj = nil
+        pcall(function() zoneObj = opszone:GetZone() end)
+        local airfieldName = (zoneObj and zoneObj:GetName()) or (pcall(function() return opszone:GetName() end) and opszone:GetName()) or "Unknown"
+        local ownerStr, ownerID = GetZoneOwnerInfo(opszone)
+        env.info("OpszoneCaptureTick: checking zone '" .. airfieldName .. "' owner=" .. tostring(ownerStr) .. "(" .. tostring(ownerID) .. ")")
+
+        -- count units belonging to the owner in this zone
+        local friendlyCount = CountUnitsInOpsZone(opszone, ownerStr)
+        env.info(string.format("OpszoneCaptureTick: friendly unit count in %s = %d", airfieldName, friendlyCount))
+
+        -- skip neutral or well-defended zones
+        if ownerStr == "neutral" then
+            return
+        end
+
+        -- if the owner has few units, trigger the opposing chief to add a patrol mission to capture
+        if friendlyCount < OPSZONE_MIN_DEFEND_COUNT then
+            local now = timer.getTime()
+            local last = OpszoneLastAttackTime[airfieldName] or 0
+            if now - last < OPSZONE_ATTACK_COOLDOWN then
+                env.info("OpszoneCaptureTick: cooldown active for " .. airfieldName)
+                return
+            end
+
+            -- pick attacker chief (opposite of owner)
+            local attackerChief = (ownerStr == "red") and BlueChief or RedChief
+            if not attackerChief then
+                env.info("OpszoneCaptureTick: attacker chief not available for " .. airfieldName)
+                return
+            end
+
+            -- limit number of similar missions already in chief for that zone
+            local existing = CountChiefMissionsForZone(attackerChief, AUFTRAG.Type.PATROLZONE, zoneObj)
+            if existing >= 2 then
+                env.info("OpszoneCaptureTick: attacker chief already has " .. existing .. " patrols for " .. airfieldName)
+                return
+            end
+
+            -- Launch attack mission
+            local launched = LaunchGroundPatrolAgainstZone(attackerChief, zoneObj, airfieldName)
+            if launched then
+                OpszoneLastAttackTime[airfieldName] = now
+                env.info("OpszoneCaptureTick: launched ground patrol against " .. airfieldName)
+            end
+        end
+    end)
+end
+
+local OpszoneCaptureScheduler = nil
+
+function StartOpszoneCaptureScheduler(startDelay, interval)
+    startDelay = tonumber(startDelay) or 30
+    interval = tonumber(interval) or 60
+    if OpszoneCaptureScheduler then
+        env.info("StartOpszoneCaptureScheduler: already running")
+        return
+    end
+    -- safe wrapper: pcall the tick so errors won't kill Moose internals
+    OpszoneCaptureScheduler = SCHEDULER:New(nil,
+        function()
+            pcall(OpszoneCaptureTick)
+        end,
+        {}, startDelay, interval)
+    env.info("StartOpszoneCaptureScheduler: started (delay=" .. startDelay .. " interval=" .. interval .. ")")
+end
+
+function StopOpszoneCaptureScheduler()
+    if OpszoneCaptureScheduler then
+        pcall(function() OpszoneCaptureScheduler:Stop() end)
+        OpszoneCaptureScheduler = nil
+        env.info("StopOpszoneCaptureScheduler: stopped")
+    else
+        env.info("StopOpszoneCaptureScheduler: not running")
+    end
+end
+
+-- start it (adjust delay/interval as required)
+StartOpszoneCaptureScheduler(30, 60)

@@ -4,19 +4,18 @@
 ----------------------------------------------------------------------------
 ----------------------------------------------------------------------------
 ScheduleMissionRestart()
+--redAirfieldszoneset = {}
+--blueAirfieldszoneset = {}
 
---CreateBlueChief()
---CreateRedChief()
 loadAirfields()
 SpawnWarehousesByFaction(blueSide, redSide)
 CreateAllAirfieldOpszones()
 OPS_Zones:Start()
-redAirfieldszoneset = {}
-blueAirfieldszoneset = {}
+
 ---for testing purpose only
 -- initialize CTLD now that zones/warehouses exist
-if BlueOpsCTLD then BlueOpsCTLD() end
-if RedOpsCTLD then RedOpsCTLD() end
+if BlueOpsCTLD then BlueOpsCTLD(blueAirfieldszoneset) end
+if RedOpsCTLD then RedOpsCTLD(redAirfieldszoneset) end
 --DeployForces()
 --deployairwings()
 
@@ -26,19 +25,28 @@ if RedOpsCTLD then RedOpsCTLD() end
 ----------------------------Mission Timmers---------------------------------
 ----------------------------------------------------------------------------
 ----------------------------------------------------------------------------
-TIMER:New(saveAirfields):Start(130, 120) 
+TIMER:New(function() pcall(saveAirfields) end):Start(130, 120)
 
-local guardTimerblueWH = TIMER:New(SpawnWarehouseGuards, "blue")
-local guardTimerredWH = TIMER:New(SpawnWarehouseGuards, "red")
-local guardTimerblueAF = TIMER:New(SpawnAirfieldGuards, "blue")
-local guardTimerredAF = TIMER:New(SpawnAirfieldGuards, "red")
-local CreateChiefBlue = TIMER:New(CreateChief, "blue")
-local CreateChiefRed = TIMER:New(CreateChief, "red")
-local DeployAirwings = TIMER:New(DeployAirwingsFromWarehouses)
-guardTimerblueWH:Start(3)
-guardTimerredWH:Start(5)
-guardTimerblueAF:Start(7)
-guardTimerredAF:Start(9)
+-- spawn guards/warehouses safely
+TIMER:New(function() pcall(SpawnAirfieldGuards, "blue") end):Start(10)
+TIMER:New(function() pcall(SpawnAirfieldGuards, "red") end):Start(12)
+TIMER:New(function() pcall(SpawnWarehouseGuards, "blue") end):Start(15)
+TIMER:New(function() pcall(SpawnWarehouseGuards, "red") end):Start(17)
+
+-- create named timers with safe wrappers
+local CreateChiefBlue = TIMER:New(function() pcall(CreateChief, "blue") end)
+local CreateChiefRed  = TIMER:New(function() pcall(CreateChief, "red") end)
+local DeployAirwings   = TIMER:New(function() pcall(DeployAirwingsFromWarehouses) end)
+local MonitorZones     = TIMER:New(function() pcall(monitoropszones) end)
+local tplayertaskingRed  = TIMER:New(function() pcall(PlayerTaskingRed) end)
+local tplayertaskingBlue = TIMER:New(function() pcall(PlayerTaskingBlue) end)
+
+-- start them
 CreateChiefBlue:Start(11)
 CreateChiefRed:Start(13)
 DeployAirwings:Start(15)
+MonitorZones:Start(20)
+tplayertaskingRed:Start(20)
+tplayertaskingBlue:Start(20)
+
+-- Start periodic OPS zone capture checks: first run after 30s, then every 60s
