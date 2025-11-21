@@ -25,14 +25,6 @@ if RedOpsCTLD then RedOpsCTLD(redAirfieldszoneset) end
 ----------------------------Mission Timmers---------------------------------
 ----------------------------------------------------------------------------
 ----------------------------------------------------------------------------
-TIMER:New(function() pcall(saveAirfields) end):Start(130, 120)
-
--- spawn guards/warehouses safely
-TIMER:New(function() pcall(SpawnAirfieldGuards, "blue") end):Start(10)
-TIMER:New(function() pcall(SpawnAirfieldGuards, "red") end):Start(12)
-TIMER:New(function() pcall(SpawnWarehouseGuards, "blue") end):Start(15)
-TIMER:New(function() pcall(SpawnWarehouseGuards, "red") end):Start(17)
-
 -- create named timers with safe wrappers
 local CreateChiefBlue = TIMER:New(function() pcall(CreateChief, "blue") end)
 local CreateChiefRed  = TIMER:New(function() pcall(CreateChief, "red") end)
@@ -41,6 +33,12 @@ local MonitorZones     = TIMER:New(function() pcall(monitoropszones) end)
 local tplayertaskingRed  = TIMER:New(function() pcall(PlayerTaskingRed) end)
 local tplayertaskingBlue = TIMER:New(function() pcall(PlayerTaskingBlue) end)
 
+TIMER:New(function() pcall(saveAirfields) end):Start(130, 120)
+-- spawn guards/warehouses safely
+TIMER:New(function() pcall(SpawnAirfieldGuards, "blue") end):Start(10)
+TIMER:New(function() pcall(SpawnAirfieldGuards, "red") end):Start(12)
+TIMER:New(function() pcall(SpawnWarehouseGuards, "blue") end):Start(15)
+TIMER:New(function() pcall(SpawnWarehouseGuards, "red") end):Start(17)
 -- start them
 CreateChiefBlue:Start(11)
 CreateChiefRed:Start(13)

@@ -1042,7 +1042,7 @@ function CreateBrigadeAtWarehouse(warehouse, airbase, airfieldName, coalitionSid
         for i = 1, numPatrolMissions do
             local airDefenseMission = CreateAirDefenseMissionForZone(zone)
             if airDefenseMission then
-                Brigade:AddMission(airDefenseMission)
+                Brigade:AddMission(airDefenseMission,GROUP.Attribute.GROUND_AIRDEFENCE)
             end
         end
     else
@@ -1970,3 +1970,82 @@ end
 
 -- start it (adjust delay/interval as required)
 StartOpszoneCaptureScheduler(30, 60)
+
+-- small utilities to harden event handlers
+
+local function SafeCall(fn, ...)
+    if type(fn) ~= "function" then return end
+    local ok, err = pcall(fn, ...)
+    if not ok then env.info("SafeCall error: " .. tostring(err)) end
+end
+
+-- Standard defensive pattern for Moose event callbacks that provide EventData
+-- Usage: replace fragile handlers with function(E) SafeEventHandler(E) end
+local function SafeEventHandler(EventData, handlerName)
+    if not EventData then
+        env.info((handlerName or "EventHandler") .. ": missing EventData")
+        return nil
+    end
+    -- common Moose fields: IniObject, IniUnit, IniGroup, IniElement
+    local asset = EventData.IniObject or EventData.IniUnit or EventData.IniGroup or EventData.IniElement
+    if not asset then
+        env.info((handlerName or "EventHandler") .. ": missing IniObject/IniUnit for event")
+        return nil
+    end
+    return asset
+end
+
+-- Example wrapper to attach a safe OnAfterDead handler on a Moose object that accepts EventData
+-- Replace direct assignments like obj:OnAfterDead(function(asset) ... end) with:
+-- AttachSafeOnAfterDead(obj, function(asset) ... end)
+local function AttachSafeOnAfterDead(obj, handler)
+    if not obj or type(handler) ~= "function" then return end
+    -- many Moose classes provide SetOnAfterDead or OnAfterDead; handle both patterns
+    if type(obj.OnAfterDead) == "function" then
+        local orig = obj.OnAfterDead
+        obj.OnAfterDead = function(self, EventData)
+            local asset = SafeEventHandler(EventData, "OnAfterDead")
+            if not asset then return end
+            SafeCall(handler, asset, EventData)
+            -- call original if present
+            if type(orig) == "function" then pcall(orig, self, EventData) end
+        end
+    elseif type(obj.AddEventHandler) == "function" then
+        -- alternative: register a generic event handler (example API varies)
+        pcall(function()
+            obj:AddEventHandler("AfterDead", function(EventData)
+                local asset = SafeEventHandler(EventData, "AfterDead")
+                if not asset then return end
+                SafeCall(handler, asset, EventData)
+            end)
+        end)
+    else
+        -- fallback: try to set method if exists
+        pcall(function() obj.OnAfterDead = function(self, EventData)
+            local asset = SafeEventHandler(EventData, "OnAfterDead")
+            if not asset then return end
+            SafeCall(handler, asset, EventData)
+        end end)
+    end
+end
+
+-- fragile:
+-- someUnit:OnAfterDead(function(self, asset) asset:SomeCall() end)
+
+-- safe example: attach a handler only if you have a real Moose object reference.
+-- Replace `MyMooseObject` with the actual object (e.g. a PLATOON/SQUADRON/UNIT object).
+-- This will not run at load time unless `MyMooseObject` exists.
+--[[
+local MyMooseObject = _G["MyMooseObjectName"]  -- set this to your actual object
+if MyMooseObject then
+    AttachSafeOnAfterDead(MyMooseObject, function(asset, EventData)
+        -- asset is validated by AttachSafeOnAfterDead / SafeEventHandler
+        SafeCall(function()
+            -- safe call on the asset
+            if type(asset.SomeCall) == "function" then
+                asset:SomeCall()
+            end
+        end)
+    end)
+end
+]]
