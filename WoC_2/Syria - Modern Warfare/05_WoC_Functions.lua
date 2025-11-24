@@ -494,27 +494,92 @@ end
 -- Spawn a group at a point within a zone
 
 
-function SpawnGroupclearzone(GroupTemplate, GroupName, SpawnZone, range)
-    range = range or 25
-    
-    local ok, posTable = pcall(function() return SpawnZone:GetClearZonePositions(range, 1) end)
-    if not ok or not posTable then
-        env.info("SpawnGroupAtPoint: GetClearZonePositions failed for " .. tostring(GroupName))
-        return
+function SpawnGroupInClearZone(GroupTemplate, GroupName, ParentZone, inner, outer, surfaceTypes, clearRange, tmpZoneRadius, maxAttempts)
+    inner = inner or 15
+    outer = outer or 100
+    clearRange = clearRange or 25
+    tmpZoneRadius = tmpZoneRadius or 500
+    maxAttempts = tonumber(maxAttempts) or 10
+
+    if not ParentZone then
+        env.info("SpawnGroupInClearZone: ParentZone is nil for " .. tostring(GroupName))
+        return false
     end
 
-    -- Take first position from table
-    local Spawnpoint = posTable[1]
-    
-    if not Spawnpoint or not Spawnpoint.x or not Spawnpoint.y then
-        env.info("SpawnGroupAtPoint: invalid spawn position for " .. tostring(GroupName))
-        return
+    for attempt = 1, maxAttempts do
+        -- get a random point in the provided parent zone
+        local okRand, randPoint = pcall(function() return ParentZone:GetRandomVec2(inner, outer, surfaceTypes) end)
+        if not okRand or not randPoint or not randPoint.x then
+            env.info(string.format("SpawnGroupInClearZone: attempt %d/%d failed to get random point for %s", attempt, maxAttempts, tostring(GroupName)))
+            -- try next attempt
+            
+        end
+
+        
+        -- create a temporary radius zone around that point (only if randPoint valid)
+        local tmpZone = nil
+        if okRand and randPoint and randPoint.x then
+            local tmpZoneName = "tmp_spawn_zone_" .. tostring(math.random(100000,999999))
+            pcall(function() tmpZone = ZONE_RADIUS:New(tmpZoneName, randPoint, tmpZoneRadius, false) end)
+        end
+
+        -- attempt to get a clear-zone position inside the temp zone
+        local spawnPoint = nil
+        if tmpZone and type(tmpZone.GetClearZonePositions) == "function" then
+            local ok2, posTable = pcall(function() return tmpZone:GetClearZonePositions(clearRange, 1) end)
+            if ok2 and posTable and posTable[1] then
+                spawnPoint = posTable[1]
+            end
+        end
+
+        -- fallback: try tmpZone:GetRandomVec2
+        if not spawnPoint and tmpZone and type(tmpZone.GetRandomVec2) == "function" then
+            local ok3, p = pcall(function() return tmpZone:GetRandomVec2(0, tmpZoneRadius) end)
+            if ok3 and p and p.x then spawnPoint = p end
+        end
+
+        -- final fallback: try ParentZone:GetRandomVec2
+        if not spawnPoint then
+            local ok4, p2 = pcall(function() return ParentZone:GetRandomVec2(inner, outer, surfaceTypes) end)
+            if ok4 and p2 and p2.x then spawnPoint = p2 end
+        end
+
+        if spawnPoint and spawnPoint.x then
+            -- spawn the group at the chosen point
+            env.info(string.format("SpawnGroupInClearZone: attempt %d/%d spawning %s as %s", attempt, maxAttempts, tostring(GroupTemplate), tostring(GroupName)))
+            local Group_Spawn = SPAWN:NewWithAlias(GroupTemplate, GroupName)
+            pcall(function() Group_Spawn:InitPositionVec2(spawnPoint) end)
+            local okSpawn, err = pcall(function() Group_Spawn:Spawn() end)
+
+            -- cleanup temporary zone (best-effort)
+            pcall(function()
+                if tmpZone then
+                    if type(tmpZone.Destroy) == "function" then tmpZone:Destroy() end
+                    if type(tmpZone.Remove) == "function" then tmpZone:Remove() end
+                end
+            end)
+
+            if okSpawn then
+                return true
+            else
+                env.info("SpawnGroupInClearZone: spawn failed: " .. tostring(err))
+                return false
+            end
+        else
+            env.info(string.format("SpawnGroupInClearZone: attempt %d/%d could not find clear point for %s", attempt, maxAttempts, tostring(GroupName)))
+            -- cleanup tmpZone before next attempt
+            pcall(function()
+                if tmpZone then
+                    if type(tmpZone.Destroy) == "function" then tmpZone:Destroy() end
+                    if type(tmpZone.Remove) == "function" then tmpZone:Remove() end
+                end
+            end)
+            -- continue next attempt
+        end
     end
 
-    env.info("Spawning " .. tostring(GroupTemplate) .. " with name " .. tostring(GroupName))
-    local Group_Spawn = SPAWN:NewWithAlias(GroupTemplate, GroupName)
-    Group_Spawn:InitPositionVec2(Spawnpoint)
-    Group_Spawn:Spawn()
+    env.info("SpawnGroupInClearZone: exhausted attempts (" .. tostring(maxAttempts) .. ") - failed to spawn " .. tostring(GroupName))
+    return false
 end
 
 function SpawnGroupAtPoint(GroupTemplate, GroupName, SpawnZone, inner, outer, surfaceTypes)
@@ -568,7 +633,7 @@ function SpawnAirfieldGuards(coalitionSide)
                     local randomIndex = math.random(1, #guardTemplates)
                     local guardTemplate = guardTemplates[randomIndex]
                     local GroupName = guardTemplate .. "_Patrol_" .. airfieldName .. "_" .. i
-                    SpawnGroupAtPoint(guardTemplate, GroupName, airfieldZone, 500, 1000, land.SurfaceType.LAND)
+                    pcall(function() SpawnGroupInClearZone(guardTemplate, GroupName, airfieldZone, 500, 1000, land.SurfaceType.LAND) end)
                 end
                 
                 -- Deploy additional SAM sites around the airfield
@@ -576,7 +641,7 @@ function SpawnAirfieldGuards(coalitionSide)
                     local randomIndex = math.random(1, #samTemplates)
                     local samTemplate = samTemplates[randomIndex]
                     local GroupName = samTemplate .. "_SAMSite_" .. airfieldName .. "_" .. i
-                    SpawnGroupAtPoint(samTemplate, GroupName, airfieldZone, 500, 1500, land.SurfaceType.LAND)
+                    pcall(function() SpawnGroupInClearZone(samTemplate, GroupName, airfieldZone, 500, 1500, land.SurfaceType.LAND) end)
                 end
                 -- Check parking spots before deploying main SAM site
                 local parkingData = airbaseParkingSummary(airfieldName)
@@ -736,37 +801,54 @@ function ChiefSettings(coalitionSide)
 end    
 
 function ChiefZones(coalitionSide)
-    
-if string.lower(coalitionSide or "") == "blue" then
-    BlueChief:SetBorderZones(blueAirfieldszoneset)
-    BlueChief:SetConflictZones(redAirfieldszoneset)
-    
-    BlueChief:AddCapZone(CapZone8,26000,400,180,25)
-    BlueChief:AddCapZone(CapZone9,26000,400,180,25)
-    BlueChief:AddCapZone(CapZone10,26000,400,180,25)
-    BlueChief:AddCapZone(CapZone13,26000,400,180,25)
-    BlueChief:AddCapZone(CapZone15,26000,400,180,25)
-    BlueChief:SetBorderZones(BlueBorderSet)
-    BlueChief:SetConflictZones(RedBorderSet)
 
+    local side = string.lower(tostring(coalitionSide or ""))
 
- elseif string.lower(coalitionSide or "") == "red" then
-    RedChief:SetBorderZones(redAirfieldszoneset)
-    RedChief:SetConflictZones(blueAirfieldszoneset)
-    
-    RedChief:AddCapZone(CapZone2,26000,400,180,25)
-    RedChief:AddCapZone(CapZone3,26000,400,180,25)
-    RedChief:AddCapZone(CapZone4,26000,400,180,25)
-    RedChief:AddCapZone(CapZone6,26000,400,180,25)
-    RedChief:AddCapZone(CapZone7,26000,400,180,25)
-    
-    BlueChief:SetBorderZones(RedBorderSet)
-    BlueChief:SetConflictZones(BlueBorderSet)
+    local function addZonesToChief(chiefObj, setObj, addFnName)
+        if not chiefObj or type(chiefObj[addFnName]) ~= "function" or not setObj or type(setObj.ForEachZone) ~= "function" then
+            return
+        end
+        setObj:ForEachZone(function(z)
+            pcall(function() chiefObj[addFnName](chiefObj, z) end)
+        end)
+    end
 
- else
-  env.info("ChiefZones: Invalid coalitionSide - " .. tostring(coalitionSide))
-  return   
- end   
+    if side == "blue" then
+        -- add airfield border/conflict zones from sets (iterate and call AddBorderZone/AddConflictZone)
+        addZonesToChief(BlueChief, blueAirfieldszoneset, "AddBorderZone")
+        addZonesToChief(BlueChief, redAirfieldszoneset, "AddConflictZone")
+
+        -- also iterate the polygon border sets if present
+        addZonesToChief(BlueChief, BlueBorderSet, "AddBorderZone")
+        addZonesToChief(BlueChief, RedBorderSet, "AddConflictZone")
+
+        -- CAP zones (guarded)
+        for _, cz in ipairs({CapZone8, CapZone9, CapZone10, CapZone13, CapZone15}) do
+            if cz and type(BlueChief.AddCapZone) == "function" then
+                pcall(function() BlueChief:AddCapZone(cz, 26000, 400, 180, 25) end)
+            end
+        end
+
+    elseif side == "red" then
+        -- add airfield border/conflict zones for red chief
+        addZonesToChief(RedChief, redAirfieldszoneset, "AddBorderZone")
+        addZonesToChief(RedChief, blueAirfieldszoneset, "AddConflictZone")
+
+        -- also iterate the polygon border sets if present
+        addZonesToChief(RedChief, RedBorderSet, "AddBorderZone")
+        addZonesToChief(RedChief, BlueBorderSet, "AddConflictZone")
+
+        -- CAP zones (guarded)
+        for _, cz in ipairs({CapZone2, CapZone3, CapZone4, CapZone6, CapZone7}) do
+            if cz and type(RedChief.AddCapZone) == "function" then
+                pcall(function() RedChief:AddCapZone(cz, 26000, 400, 180, 25) end)
+            end
+        end
+
+    else
+        env.info("ChiefZones: Invalid coalitionSide - " .. tostring(coalitionSide))
+        return
+    end
 end
 
 function ChiefResourceLists(coalitionSide)
@@ -888,58 +970,7 @@ function GenerateUniqueSquadronName(baseName)
     return name
 end
 
--- Function to create Blue Airwing 
 
--- Create AWACS Squadron for Blue or Red coalition
-function CreateAwacsSqn(Airwing, coalitionSide)
-    if not Airwing or not coalitionSide then
-        env.info("CreateAwacsSqn: missing Airwing or coalitionSide parameter")
-        return
-    end
-
-    local side = string.lower(coalitionSide or "")
-    local templateName, squadronName, payloadName
-    local missionSet = {AUFTRAG.Type.ORBIT, AUFTRAG.Type.AWACS}
-    local priority = 100
-    local count = 2
-
-    if side == "blue" then
-        if blueawacscount >= 1 then
-            env.info("CreateAwacsSqn: Blue AWACS already deployed, skipping")
-            return
-        end
-        templateName = "Blue_AWACS"
-        squadronName = "Darkstar"
-        payloadName = "Blue_payload_Awacs"
-        blueawacscount = blueawacscount + 1
-    elseif side == "red" then
-        if redawacscount >= 1 then
-            env.info("CreateAwacsSqn: Red AWACS already deployed, skipping")
-            return
-        end
-        templateName = "Red_AWACS"
-        squadronName = "Magic"
-        payloadName = "Red_payload_Awacs"
-        redawacscount = redawacscount + 1
-        else
-        env.info("CreateAwacsSqn: Invalid coalitionSide - " .. tostring(coalitionSide))
-        return
-    end
-
-    -- Create the AWACS Squadron
-    local AwacsSqn = SQUADRON:New(templateName, count, squadronName)
-    AwacsSqn:AddMissionCapability(missionSet, priority)
-    AwacsSqn:SetFuelLowRefuel(true)
-    AwacsSqn:SetFuelLowThreshold(0.2)
-    AwacsSqn:SetTurnoverTime(10, 20)
-    AwacsSqn:SetTakeoffAir()
-
-    -- Create payload
-    local payload = Airwing:NewPayload(GROUP:FindByName(templateName), count, missionSet, priority)
-    Airwing:AddSquadron(AwacsSqn)
-
-    env.info("AWACS Squadron created: " .. squadronName .. " for " .. tostring(coalitionSide))
-end
 
 -- Create fighter squadron. If `role` is provided it selects only that template group (e.g. "Fighter", "LT_Fighter", "Attack").
 -- If `role` is nil or empty it will create squadrons for all entries in FighterTemplates[side].
@@ -1008,6 +1039,85 @@ function CreateFighterSQN(coalitionSide, airwing, airfieldName, role)
 
         env.info("Squadron created: " .. squadName .. " using template " .. tostring(chosenTemplate))
     end
+end
+function CreateAwacsSqn(airwing, coalitionSide, airfieldName)
+    if not airwing or not coalitionSide or not airfieldName then
+        env.info("CreateAwacsSqn: missing parameters")
+        return nil
+    end
+
+    local side = string.lower(tostring(coalitionSide))
+    local parkingData = airbaseParkingSummary(airfieldName)
+    if not parkingData then
+        env.info("CreateAwacsSqn: parking data not available for " .. tostring(airfieldName))
+        return nil
+    end
+
+    if side == "blue" then
+        if (blueawacscount or 0) < 1 and (parkingData.aircraftParkingCount or 0) > 100 then
+            env.info("Info: AWACS SQN Deployed to Airwing: " .. tostring(airwing and pcall(function() return airwing:GetName() end) and airwing:GetName() or "<unknown>"))
+            local ok, sq = pcall(function() return SQUADRON:New("Blue_AWACS", 2, "Darkstar") end)
+            if not ok or not sq then
+                env.info("CreateAwacsSqn: SQUADRON:New failed for Blue_AWACS -> " .. tostring(sq))
+                return nil
+            end
+            pcall(function() sq:AddMissionCapability({AUFTRAG.Type.ORBIT, AUFTRAG.Type.AWACS}, 100) end)
+            pcall(function() sq:SetFuelLowRefuel(true) end)
+            pcall(function() sq:SetFuelLowThreshold(0.2) end)
+            pcall(function() sq:SetTurnoverTime(10, 20) end)
+            pcall(function() sq:SetTakeoffAir() end)
+
+            pcall(function()
+                local grp = GROUP:FindByName("Blue_AWACS")
+                if grp and type(airwing.NewPayload) == "function" then
+                    Blue_payload_Awacs = airwing:NewPayload(grp, 2, {AUFTRAG.Type.ORBIT, AUFTRAG.Type.AWACS}, 100)
+                else
+                    env.info("CreateAwacsSqn: Blue_AWACS payload group missing or airwing.NewPayload unavailable")
+                end
+            end)
+
+            pcall(function() if type(airwing.AddSquadron) == "function" then airwing:AddSquadron(sq) end end)
+            blueawacscount = (blueawacscount or 0) + 1
+            BlueAwacsAirwing = airwing
+            BlueAwacsAirfieldName = airfieldName
+            env.info("CreateAwacsSqn: Blue AWACS squadron created at " .. tostring(airfieldName))
+            return sq
+        end
+    elseif side == "red" then
+        if (redawacscount or 0) < 1 and (parkingData.aircraftParkingCount or 0) > 100 then
+            env.info("Info: AWACS SQN Deployed to Airwing: " .. tostring(airwing and pcall(function() return airwing:GetName() end) and airwing:GetName() or "<unknown>"))
+            local ok, sq = pcall(function() return SQUADRON:New("Red_AWACS", 2, "Magic") end)
+            if not ok or not sq then
+                env.info("CreateAwacsSqn: SQUADRON:New failed for Red_AWACS -> " .. tostring(sq))
+                return nil
+            end
+            pcall(function() sq:AddMissionCapability({AUFTRAG.Type.ORBIT, AUFTRAG.Type.AWACS}, 100) end)
+            pcall(function() sq:SetFuelLowRefuel(true) end)
+            pcall(function() sq:SetFuelLowThreshold(0.2) end)
+            pcall(function() sq:SetTurnoverTime(10, 20) end)
+            pcall(function() sq:SetTakeoffAir() end)
+
+            pcall(function()
+                local grp = GROUP:FindByName("Red_AWACS")
+                if grp and type(airwing.NewPayload) == "function" then
+                    Red_payload_Awacs = airwing:NewPayload(grp, 2, {AUFTRAG.Type.ORBIT, AUFTRAG.Type.AWACS}, 100)
+                else
+                    env.info("CreateAwacsSqn: Red_AWACS payload group missing or airwing.NewPayload unavailable")
+                end
+            end)
+
+            pcall(function() if type(airwing.AddSquadron) == "function" then airwing:AddSquadron(sq) end end)
+            redawacscount = (redawacscount or 0) + 1
+            RedAwacsAirwing = airwing
+            env.info("CreateAwacsSqn: Red AWACS squadron created at " .. tostring(airfieldName))
+            return sq
+        end
+    else
+        env.info("CreateAwacsSqn: invalid side " .. tostring(coalitionSide))
+        return nil
+    end
+
+    return nil
 end
 
 -- Create a brigade at the given warehouse / airbase using the templates above
@@ -1115,16 +1225,9 @@ function CreateAirwing(warehouse, coalitionSide)
 
     local airbase = AIRBASE:FindByName(airfieldName)
     local parkingData = airbaseParkingSummary(airfieldName)
-    
-    if not parkingData then
-        env.info("No parking data available for " .. airfieldName)
-        return
-    end
-    
-    if blueawacscount < 1 and parkingData.aircraftParkingCount > 100 then
-        CreateAwacsSqn(airwing, coalitionSide)
-    end
+    if not parkingData then return end
 
+    -- create fighters / helos as before
     if parkingData.aircraftParkingCount > 10 then
         CreateFighterSQN(coalitionSide, airwing, airfieldName, "Fighter")
         CreateFighterSQN(coalitionSide, airwing, airfieldName, "LT_Fighter")
@@ -1139,6 +1242,9 @@ function CreateAirwing(warehouse, coalitionSide)
     else
         env.info("Not enough helicopter parking spots at " .. airfieldName)
     end
+
+    -- Create AWACS if criteria met (uses new helper)
+    pcall(function() CreateAwacsSqn(airwing, coalitionSide, airfieldName) end)
 
     -- Hook into Airwing spawn destroy in the event the aircraft is stuck
     airwing:HandleEvent(EVENTS.Birth)
@@ -1885,6 +1991,7 @@ end
 
 -- main tick: evaluate OPS_Zones and assign auftrag missions when zone is "heavily damaged"
 local function OpszoneCaptureTick()
+
     if not OPS_Zones or type(OPS_Zones.ForEachZone) ~= "function" then
         env.info("OpszoneCaptureTick: OPS_Zones missing or invalid")
         return
@@ -2029,23 +2136,40 @@ local function AttachSafeOnAfterDead(obj, handler)
     end
 end
 
--- fragile:
--- someUnit:OnAfterDead(function(self, asset) asset:SomeCall() end)
+function GCI()
+    -- Set up AWACS called "AWACS North". It will use the AwacsAW Airwing set up above and be of the "blue" coalition. Homebase is Kutaisi.
+    -- The AWACS Orbit Zone is a round zone set in the mission editor named "Awacs Orbit", the FEZ is a Polygon-Zone called "Rock" we have also
+    -- set up in the mission editor with a late activated helo named "Rock#ZONE_POLYGON". Note this also sets the BullsEye to be referenced as "Rock".
+    -- The CAP station zone is called "Fremont". We will be on 255 AM.
+    local Blueawacs = AWACS:New("Darkstar",BlueAwacsAirwing,"blue"    ,AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_SW-1",ZONE:FindByName("Bulls"),"CAP_Zone_SW-1",255,radio.modulation.AM )
+    Blueawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+    -- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
+    Blueawacs:SetAwacsDetails(CALLSIGN.AWACS.Darkstar,1,30,300,88,25)
+    -- Set up SRS on port 5002 - change the below to your path and port
+    Blueawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","Male","en-US",5002)
+    -- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
+    --Blueawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
+    -- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
+    --Blueawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
+    -- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
+    Blueawacs:SetModernEraAggressive()
 
--- safe example: attach a handler only if you have a real Moose object reference.
--- Replace `MyMooseObject` with the actual object (e.g. a PLATOON/SQUADRON/UNIT object).
--- This will not run at load time unless `MyMooseObject` exists.
---[[
-local MyMooseObject = _G["MyMooseObjectName"]  -- set this to your actual object
-if MyMooseObject then
-    AttachSafeOnAfterDead(MyMooseObject, function(asset, EventData)
-        -- asset is validated by AttachSafeOnAfterDead / SafeEventHandler
-        SafeCall(function()
-            -- safe call on the asset
-            if type(asset.SomeCall) == "function" then
-                asset:SomeCall()
-            end
-        end)
-    end)
+    -- And start
+    Blueawacs:__Start(5)
+
+    local Redawacs = AWACS:New("Magic",RedAwacsAirwing,"red",AIRBASE:FindByName(BlueAwacsAirfieldName),"CAP_Zone_NW-1",ZONE:FindByName("Bulls"),"CAP_Zone_NW-1",245,radio.modulation.AM )
+    -- set one escort group; this example has two units in the template group, so they can fly a nice formation.
+    Redawacs:SetEscort(2,ENUMS.Formation.FixedWing.FingerFour.Group,{x=-500,y=50,z=500},45)
+    -- Callsign will be "Focus". We'll be a Angels 30, doing 300 knots, orbit leg to 88deg with a length of 25nm.
+    Redawacs:SetAwacsDetails(CALLSIGN.AWACS.Magic,1,30,300,88,25)
+    -- Set up SRS on port 5002 - change the below to your path and port
+    Redawacs:SetSRS("C:\\Program Files\\DCS-SimpleRadio-Standalone","Male","en-US",5002)
+    -- Add a "red" border we don't want to cross, set up in the mission editor with a late activated helo named "Red Border#ZONE_POLYGON"
+    --Redawacs:SetRejectionZone(ZONE:FindByName("Red Border"))
+    -- Our CAP flight will have the callsign "Ford", we want 4 AI planes, Time-On-Station is four hours, doing 300 kn IAS.
+    --Redawacs:SetAICAPDetails(CALLSIGN.Aircraft.Ford,4,4,300)
+    -- We're modern (default), e.g. we have EPLRS and get more fill-in information on detections
+    Redawacs:SetModernEraAggressive()
+    -- And start
+    Redawacs:__Start(5)
 end
-]]
