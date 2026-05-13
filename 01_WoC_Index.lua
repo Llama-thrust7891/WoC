@@ -13,3 +13,5 @@ dofile(lfs.writedir() .. "Missions/WoC-Sinai/05_WoC_Main.lua")
 
 -----Coldwar units table-----
 BlueSamGroupName = Group_USA_Hawk
+
+--test
