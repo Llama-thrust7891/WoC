@@ -288,7 +288,7 @@ function Spawn_Near_airbase(GroupTemplate, airfieldName, Inner, Outer, Patrol)
     if WarehouseFound then
         local WarehouseCoord = WarehouseFound:GetCoordinate()
         local WarehouseZone = ZONE_RADIUS:New("WarehouseZone", WarehouseCoord:GetVec2(), 200)
-        Spawnpoint = WarehouseZone:GetRandomCoordinate(80, 200, land.SurfaceType.ROAD)
+        Spawnpoint = WarehouseZone:GetClearZonePositions(50, 20)
         env.info("Spawn point set near warehouse at " .. airfieldName)
     else
         -- Default to airbase zone if no warehouse is found
@@ -377,8 +377,8 @@ function SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
     local Attempts = 0
 
     repeat
-        Spawnpoint = SpawnZone:GetRandomCoordinate(150, 1000, land.SurfaceType.ROAD)
-        if land.getSurfaceType(Spawnpoint) == land.SurfaceType.ROAD then
+        Spawnpoint = SpawnZone:GetRandomClearZoneCoordinate(100, 20)
+        if Spawnpoint then
             ValidSpawn = true
         else
             Attempts = Attempts + 1
@@ -390,7 +390,7 @@ function SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
         trigger.action.outText("WARNING: Could not find a clear spawn point for warehouse at " .. airfieldName .. ". Using fallback", 10)
         env.info("WARNING: No clear warehouse spawn point found at " .. airfieldName .. ". Using fallback")
         
-        Spawnpoint = SpawnZone:GetRandomCoordinate(300, 600, land.SurfaceType.LAND)  -- Fallback zone
+        Spawnpoint = SpawnZone:GetRandomClearZoneCoordinate(50, 20)  -- Fallback zone
         
         if land.getSurfaceType(Spawnpoint) ~= land.SurfaceType.LAND then
             trigger.action.outText("ERROR: Fallback method failed for warehouse at " .. airfieldName, 10)
@@ -532,11 +532,20 @@ function SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance
             local Spawnpoint = nil
 
             if WarehouseZone then
-                Spawnpoint = WarehouseZone:GetRandomCoordinate(80, 200, land.SurfaceType.ROAD)
+                Spawnpoint = WarehouseZone:GetRandomClearZoneCoordinate(25, 20)
             else
-                Spawnpoint = SpawnZone:GetRandomCoordinate(MinDistance, MaxDistance, land.SurfaceType.ROAD)
+                Spawnpoint = SpawnZone:GetRandomClearZoneCoordinate(25, 20)
             end
 
+            if not Spawnpoint then
+                env.info("WARNING: No valid spawnpoint for "..GroupTemplate.." at "..airfieldName..". Using fallback.")
+                Spawnpoint = SpawnZone:GetRandomCoordinate(MinDistance, MaxDistance)
+            end
+            if not Spawnpoint then
+                env.info("ERROR: All spawnpoint methods failed for "..GroupTemplate.." at "..airfieldName..". Skipping.")
+                SamCount = SamCount + 1
+                return
+            end
             env.info("Spawning "..GroupTemplate.." with name "..GroupName)
             local Group_Spawn = SPAWN:NewWithAlias(GroupTemplate, GroupName)
             Group_Spawn:InitPositionCoordinate(Spawnpoint)
@@ -607,11 +616,20 @@ function SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance,
             local Spawnpoint = nil
 
             if WarehouseZone then
-                Spawnpoint = WarehouseZone:GetRandomCoordinate(80, 200, land.SurfaceType.ROAD)
+                Spawnpoint = WarehouseZone:GetRandomClearZoneCoordinate(25, 20)
             else
-                Spawnpoint = SpawnZone:GetRandomCoordinate(MinDistance, MaxDistance, land.SurfaceType.ROAD)
+                Spawnpoint = SpawnZone:GetRandomClearZoneCoordinate(25, 20)
             end
 
+            if not Spawnpoint then
+                env.info("WARNING: No valid spawnpoint for "..GroupTemplate.." at "..airfieldName..". Using fallback.")
+                Spawnpoint = SpawnZone:GetRandomCoordinate(MinDistance, MaxDistance)
+            end
+            if not Spawnpoint then
+                env.info("ERROR: All spawnpoint methods failed for "..GroupTemplate.." at "..airfieldName..". Skipping.")
+                SamCount = SamCount + 1
+                return
+            end
             env.info("Spawning "..GroupTemplate.." with name "..GroupName)
             local Group_Spawn = SPAWN:NewWithAlias(GroupTemplate, GroupName)
             Group_Spawn:InitPositionCoordinate(Spawnpoint)
@@ -1378,8 +1396,10 @@ function monitoropszones()
 
             if existingAirwing then
                 local stockInfo = existingAirwing:GetStockInfo()
-                for stockItem, _ in pairs(stockInfo) do
-                    existingAirwing:_DeleteStockItem(stockItem)
+                if stockInfo then
+                    for stockItem, _ in pairs(stockInfo) do
+                        existingAirwing:_DeleteStockItem(stockItem)
+                    end
                 end
                 env.info("Existing airwing stock items deleted: " .. warehouseName)
                 if coalitionSide == "blue" then
@@ -1402,7 +1422,11 @@ function monitoropszones()
                 SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
                 SpawnBlueForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
                 warehouse = STATIC:FindByName(warehouseName)
-                CreateBlueAirwing(warehouse, airwingName, airfieldName)
+                if warehouse then
+                    CreateBlueAirwing(warehouse, airwingName, airfieldName)
+                else
+                    env.info("ERROR: Warehouse static not found after spawn: " .. warehouseName)
+                end
                 
                  Blue_ctld:AddCTLDZone(airfieldName,CTLD.CargoZoneType.LOAD,SMOKECOLOR.Blue,true,true)
                  env.info("Blue ZONE added to CTLD LOAD ZONE: " .. airfieldName)
@@ -1412,7 +1436,11 @@ function monitoropszones()
                 SpawnWarehouse(airfieldName, warehouseName, coalitionSide)
                 SpawnRedForces(airfieldName, warehouseName, coalitionSide, MinDistance, MaxDistance)
                 warehouse = STATIC:FindByName(warehouseName)
-                CreateRedAirwing(warehouse, airwingName, airfieldName)
+                if warehouse then
+                    CreateRedAirwing(warehouse, airwingName, airfieldName)
+                else
+                    env.info("ERROR: Warehouse static not found after spawn: " .. warehouseName)
+                end
 
                  Red_ctld:AddCTLDZone(airfieldName,CTLD.CargoZoneType.LOAD,SMOKECOLOR.Red,true,true)
                  env.info("Red ZONE added to CTLD LOAD ZONE: " .. airfieldName)
@@ -2874,17 +2902,21 @@ function ATCGroundOps()
     for _, airbase in ipairs(world.getAirbases()) do
         Freq = Freq + 0.50
         local abName = airbase:getName()
-        local atc = FLIGHTCONTROL:New(abName, Freq, 0, "C:\\Program Files\\DCS-SimpleRadio-Standalone", 5002)
-        atc:SetParkingGuard(Group_Neutral_Inf)
-            :SetSpeedLimitTaxi(25)
-            :SetLimitTaxi(1, true, 1)
-            :SetLimitLanding(2, 0)
-            :SetMarkHoldingPattern(false)
-            :SetVerbosity(1)
-            :SetRunwayRepairtime(7200)
-        atc:Start()
-        ATC_Controllers[abName] = atc
-        env.info("ATC Ground Ops: " .. abName .. " at frequency " .. Freq)
+        local atc = FLIGHTCONTROL:New(abName, Freq, 0, "C:\\Program Files\\DCS-SimpleRadio-Standalone", 5001)
+        if not atc then
+            env.info("ATC Ground Ops: Skipping " .. abName .. " (FLIGHTCONTROL returned nil)")
+        else
+            atc:SetParkingGuard(Group_Neutral_Inf)
+                :SetSpeedLimitTaxi(25)
+                :SetLimitTaxi(1, true, 1)
+                :SetLimitLanding(2, 0)
+                :SetMarkHoldingPattern(false)
+                :SetVerbosity(1)
+                :SetRunwayRepairtime(7200)
+            atc:Start()
+            ATC_Controllers[abName] = atc
+            env.info("ATC Ground Ops: " .. abName .. " at frequency " .. Freq)
+        end
     end
 end
 function RestartAllATCGroundOps()
